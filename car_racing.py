@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import gym
 import time
@@ -75,13 +75,16 @@ class DDDQN(Model, ABC):
 
 
 class DiscreteActionWrapper(gym.ActionWrapper, ABC):
-    def __init__(self, environment, disc_to_cont):
+    _disc_to_cont: List[ndarray]
+    _action_space: gym.spaces.Discrete
+
+    def __init__(self, environment: gym.Env, disc_to_cont: List[ndarray]):
         super(DiscreteActionWrapper, self).__init__(environment)
-        self.disc_to_cont = disc_to_cont
+        self._disc_to_cont = disc_to_cont
         self._action_space = gym.spaces.Discrete(len(disc_to_cont))
 
     def action(self, act):
-        return self.disc_to_cont[act]
+        return self._disc_to_cont[act]
 
 
 def transform_observation(obs: ndarray) -> ndarray:
@@ -100,24 +103,28 @@ def create_environment() -> gym.Env:
 
 class ReplayBuffer:
     _buffer_size: int
-    _memory: List[Tuple[ndarray, int, float, ndarray, bool]]
+    _memory: List[Optional[Tuple[ndarray, int, float, ndarray, bool]]]
+    _counter: int
+    _samples: int
 
     def __init__(self, buffer_size: int = 1000000):
         self._buffer_size = buffer_size
-        self._memory = []
+        self._memory = [None] * self._buffer_size
+        self._counter = 0
+        self._samples = 0
 
     @property
     def size(self) -> int:
-        return len(self._memory)
+        return self._samples
 
     def add(self, state: ndarray, action: int, reward: float, observation: ndarray, done: bool):
         experience: Tuple[ndarray, int, float, ndarray, bool] = (state, action, reward, observation, done)
-        self._memory.append(experience)
-        if self.size > self._buffer_size:
-            self._memory = sample(self._memory, int(self._buffer_size * 0.6))
+        self._memory[self._counter % self._buffer_size] = experience
+        self._counter += 1
+        self._samples = min(self._counter, self._buffer_size)
 
     def sample_batch(self, batch_size: int = 64) -> List[Tuple[ndarray, int, float, ndarray, bool]]:
-        batch: List[Tuple[ndarray, int, float, ndarray, bool]] = sample(self._memory, batch_size)
+        batch: List[Tuple[ndarray, int, float, ndarray, bool]] = sample(self._memory[0:self._samples], batch_size)
         return batch
 
 
@@ -172,8 +179,8 @@ class Agent:
                 target_val: float = rewards[index]
             else:
                 target_val: float = rewards[index] + GAMMA * next_q_tm[index, action] - q[index, actions[index]]
-            q_target: Tensor = cast(q[index], dtype=float64) + one_hot(
-                actions[index], env.action_space.n, on_value=cast(target_val, dtype=float64))
+            q_target: Tensor = cast(q[index], dtype=float64) + one_hot(actions[index], env.action_space.n,
+                                                                       on_value=cast(target_val, dtype=float64))
             targets.append(q_target)
         targets: Tensor = convert_to_tensor(targets, dtype=float64)
         return targets
@@ -228,7 +235,8 @@ class Agent:
                 if self._replay_buffer.size >= TRAINING_START and step_count % TRAIN_FREQUENCY == 0:
                     print('Training step: {}'.format(step_count))
                     sampling_start: float = time.time()
-                    batch: List[Tuple[ndarray, int, float, ndarray, bool]] = self._replay_buffer.sample_batch(BATCH_SIZE)
+                    batch: List[Tuple[ndarray, int, float, ndarray, bool]] = self._replay_buffer.sample_batch(
+                        BATCH_SIZE)
                     sampling_end: float = time.time()
                     print('Sampling time: {}'.format(sampling_end - sampling_start))
                     preprocessing_start: float = time.time()
@@ -274,7 +282,7 @@ class Agent:
 
 def visualize(model: DDDQN):
     state: ndarray = env.reset()
-    for step in range(MAX_STEPS):
+    for _ in range(MAX_STEPS):
         action = argmax(model.advantage(state))
         state, reward, done, info = env.step(action)
         print(reward)
@@ -320,3 +328,7 @@ if __name__ == '__main__':
     visualize(agent.model)
 
     agent.training()
+
+
+# TODO: optimize replay buffer structure
+# TODO: implement early episode stopping mechanism
