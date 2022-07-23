@@ -1,6 +1,6 @@
 from abc import ABC
 from typing import List, Tuple
-from random import sample, uniform, randint
+from random import uniform, randint
 
 import time
 
@@ -14,7 +14,7 @@ from tensorflow.keras.losses import Loss, Huber
 from tensorflow.keras.optimizers import Optimizer, Adam
 from tensorflow.keras.regularizers import l2
 
-from numpy import ndarray, newaxis, argmax, append
+from numpy import ndarray, newaxis, argmax, append, zeros, random, int64, float64
 from statistics import mean
 
 
@@ -48,24 +48,43 @@ class DDDQN(Model, ABC, Module):
 
 class ReplayBuffer:
     _buffer_size: int
-    _memory: List[Tuple[ndarray, int, float, ndarray, bool]]
+    _states: ndarray
+    _actions: ndarray
+    _rewards: ndarray
+    _observations: ndarray
+    _dones: ndarray
+    _counter: int
+    _samples: int
 
-    def __init__(self, buffer_size: int = 1000000):
+    def __init__(self,
+                 obs_shape: Tuple[int, int],
+                 buffer_size: int = 1000000):
         self._buffer_size = buffer_size
-        self._memory = []
+        self._states = zeros(obs_shape, dtype=float64)
+        self._actions = zeros((buffer_size,), dtype=int64)
+        self._rewards = zeros((buffer_size,), dtype=float64)
+        self._observations = zeros(obs_shape, dtype=float64)
+        self._dones = zeros((buffer_size,), dtype=bool)
+        self._counter = 0
+        self._samples = 0
 
     @property
     def size(self) -> int:
-        return len(self._memory)
+        return self._samples
 
     def add(self, state: ndarray, action: int, reward: float, observation: ndarray, done: bool):
-        experience: Tuple[ndarray, int, float, ndarray, bool] = (state, action, reward, observation, done)
-        self._memory.append(experience)
-        if self.size > self._buffer_size:
-            self._memory = sample(self._memory, int(self._buffer_size * 0.6))
+        self._states[self._counter % self._buffer_size] = state
+        self._actions[self._counter % self._buffer_size] = action
+        self._rewards[self._counter % self._buffer_size] = reward
+        self._observations[self._counter % self._buffer_size] = observation
+        self._dones[self._counter % self._buffer_size] = done
+        self._counter += 1
+        self._samples = min(self._counter, self._buffer_size)
 
-    def sample_batch(self, batch_size: int = 64) -> List[Tuple[ndarray, int, float, ndarray, bool]]:
-        batch: List[Tuple[ndarray, int, float, ndarray, bool]] = sample(self._memory, batch_size)
+    def sample_batch(self, batch_size: int = 64) -> Tuple[ndarray, ndarray, ndarray, ndarray, ndarray]:
+        random_indices: ndarray = random.randint(0, self._samples - 1, batch_size)
+        batch = (self._states[random_indices], self._actions[random_indices], self._rewards[random_indices],
+                 self._observations[random_indices], self._dones[random_indices])
         return batch
 
 
@@ -78,7 +97,8 @@ class Agent:
     _episode_rewards: List[float]
 
     def __init__(self, q_net: DDDQN):
-        self._replay_buffer = ReplayBuffer()
+        buffer_size: int = 100000
+        self._replay_buffer = ReplayBuffer(buffer_size=buffer_size, obs_shape=(buffer_size, 9))
         self._q_model = q_net
         self._target_model = DDDQN()
         self._target_model.set_weights(self._q_model.get_weights())
@@ -97,9 +117,9 @@ class Agent:
     def _average_reward(self) -> float:
         return mean(self._episode_rewards)
 
-    def _policy(self, x: Tensor or ndarray) -> int or ndarray[int]:
+    def _policy(self, x: Tensor or ndarray) -> int or ndarray:
         if self._epsilon < uniform(0, 1):
-            action: ndarray[int] = argmax(self._q_model.advantage(x))
+            action: ndarray = argmax(self._q_model.advantage(x))
             return action
         else:
             action: int = randint(0, 3)
@@ -108,12 +128,12 @@ class Agent:
     def _update_target_model(self):
         self._target_model.set_weights(self._q_model.get_weights())
 
-    def _compute_q_targets(self, states: Tensor, actions: Tuple[int], rewards: Tuple[float], observations: Tensor,
-                           dones: Tuple[bool]) -> Tensor:
+    def _compute_q_targets(self, states: Tensor, actions: ndarray, rewards: ndarray,
+                           observations: Tensor, dones: ndarray) -> Tensor:
         q: Tensor = self._q_model(states)
         next_q: Tensor = self._q_model(observations)
         next_q_tm: Tensor = self._target_model(observations)
-        max_actions: ndarray[int] = argmax(next_q, axis=1)
+        max_actions: ndarray = argmax(next_q, axis=1)
         targets: List = []
         for index, action in enumerate(max_actions):
             if dones[index]:
@@ -135,17 +155,11 @@ class Agent:
         adam.apply_gradients(zip(grads, self._q_model.trainable_variables))
 
     @staticmethod
-    def _preprocess(batch: List[Tuple[ndarray, int, float, ndarray, bool]]
-                    ) -> Tuple[Tensor, Tuple[int], Tuple[float], Tensor, Tuple[bool]]:
-        data: List = []
-        for iter_obj in zip(*batch):
-            data.append(iter_obj)
-        states: Tensor = convert_to_tensor(data[0], dtype=float64)
-        actions: Tuple[int] = data[1]
-        rewards: Tuple[float] = data[2]
-        observations: Tensor = convert_to_tensor(data[3], dtype=float64)
-        dones: Tuple[bool] = data[4]
-        return states, actions, rewards, observations, dones
+    def _preprocess(batch: Tuple[ndarray, ndarray, ndarray, ndarray, ndarray]
+                    ) -> Tuple[Tensor, ndarray, ndarray, Tensor, ndarray]:
+        states: Tensor = convert_to_tensor(batch[0], dtype=tf.float64)
+        observations: Tensor = convert_to_tensor(batch[3], dtype=tf.float64)
+        return states, batch[1], batch[2], observations, batch[4]
 
     def _build(self):
         test_input: ndarray = env.reset()
@@ -180,10 +194,22 @@ class Agent:
                 episode_reward += reward
 
                 if self._replay_buffer.size >= TRAINING_START and step_count % TRAIN_FREQUENCY == 0:
-                    batch: List[Tuple[ndarray, int, float, ndarray, bool]] = self._replay_buffer.sample_batch(BATCH_SIZE)
+                    sampling_start: float = time.time()
+                    batch: Tuple[ndarray, ndarray, ndarray, ndarray, ndarray] = self._replay_buffer.sample_batch(BATCH_SIZE)
+                    sampling_end: float = time.time()
+                    print('Sampling time: {}'.format(sampling_end - sampling_start))
+                    preprocessing_start: float = time.time()
                     states, actions, rewards, observations, dones = self._preprocess(batch)
+                    preprocessing_end: float = time.time()
+                    print('Preprocessing time: {}'.format(preprocessing_end - preprocessing_start))
+                    q_start: float = time.time()
                     q_targets: Tensor = self._compute_q_targets(states, actions, rewards, observations, dones)
+                    q_end: float = time.time()
+                    print('Q-time: {}'.format(q_end - q_start))
+                    train_start: float = time.time()
                     self._train_step(states, q_targets)
+                    train_end: float = time.time()
+                    print('Training time: {}'.format(train_end - train_start))
 
                 if done:
                     break
@@ -217,7 +243,7 @@ def visualize(network: DDDQN):
         fraction_finished: float = (step + 1) / MAX_STEPS
         state = append(state, fraction_finished)
         state = state[newaxis, ...]
-        action: ndarray[int] = argmax(network.advantage(state))
+        action: ndarray = argmax(network.advantage(state))
         state, reward, done, info = env.step(action)
         env.render()
         if done:
@@ -254,7 +280,7 @@ if __name__ == '__main__':
     checkpoint.restore(manager.latest_checkpoint)
 
     # train
-    # agent.training()
+    agent.training()
 
     # visualize trained agent
     for _ in range(1):

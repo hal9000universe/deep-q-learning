@@ -13,12 +13,11 @@ class ReplayBuffer:
     _samples: int
 
     def __init__(self,
-                 obs_shape: Tuple[int],
-                 ac_shape: Tuple[int],
+                 obs_shape: Tuple,
                  buffer_size: int = 1000000):
         self._buffer_size = buffer_size
         self._states = zeros(obs_shape, dtype=float64)
-        self._actions = ones(ac_shape, dtype=int64)
+        self._actions = ones((buffer_size,), dtype=int64)
         self._rewards = zeros((buffer_size,), dtype=float64)
         self._observations = zeros(obs_shape, dtype=float64)
         self._dones = zeros((buffer_size,), dtype=bool)
