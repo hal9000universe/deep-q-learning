@@ -1,3 +1,5 @@
 # deep-reinforcement-learning
 
-This repository implements simple reinforcement learning algorithms in various open ai gym environments.
+The goal of this repository is to experiment 
+with various reinforcement learning algorithms
+and apply them to different environments.
