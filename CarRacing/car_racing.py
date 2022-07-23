@@ -17,7 +17,7 @@ from statistics import mean
 from random import uniform, sample, randint
 
 
-class DDDQN(Model, ABC):
+class DDQN(Model, ABC):
     _conv1: Conv3D
     _conv2: Conv3D
     _batch_norm1: BatchNormalization
@@ -27,11 +27,10 @@ class DDDQN(Model, ABC):
     _flatten: Flatten
     _dense1: Dense
     _dense2: Dense
-    _val: Dense
-    _adv: Dense
+    _q: Dense
 
     def __init__(self):
-        super(DDDQN, self).__init__()
+        super(DDQN, self).__init__()
         self._conv1 = Conv3D(128, (1, 2, 2), activation='relu', kernel_regularizer=l2(REGULARIZATION_FACTOR),
                              input_shape=(4, 96, 96, 3))
         self._conv2 = Conv3D(64, (2, 3, 3), activation='relu', kernel_regularizer=l2(REGULARIZATION_FACTOR))
@@ -42,8 +41,7 @@ class DDDQN(Model, ABC):
         self._flatten = Flatten()
         self._dense1 = Dense(128, activation='relu', kernel_regularizer=l2(REGULARIZATION_FACTOR))
         self._dense2 = Dense(64, activation='relu', kernel_regularizer=l2(REGULARIZATION_FACTOR))
-        self._val = Dense(1, activation='linear')
-        self._adv = Dense(env.action_space.n, activation='linear')
+        self._q = Dense(env.action_space.n, activation='linear')
 
     def call(self, x: ndarray, training: bool = False, mask=None) -> Tensor:
         x = self._conv1(x)
@@ -55,23 +53,8 @@ class DDDQN(Model, ABC):
         x = self._flatten(x)
         x = self._dense1(x)
         x = self._dense2(x)
-        val = self._val(x)
-        adv = self._adv(x)
-        Q = val + adv - tf.math.reduce_mean(adv, axis=1, keepdims=True)
+        Q = self._q(x)
         return Q
-
-    def advantage(self, x: ndarray) -> Tensor:
-        x = self._conv1(x)
-        x = self._max_pool1(x)
-        x = self._batch_norm1(x)
-        x = self._conv2(x)
-        x = self._max_pool2(x)
-        x = self._batch_norm2(x)
-        x = self._flatten(x)
-        x = self._dense1(x)
-        x = self._dense2(x)
-        adv = self._adv(x)
-        return adv
 
 
 class DiscreteActionWrapper(gym.ActionWrapper, ABC):
@@ -130,16 +113,16 @@ class ReplayBuffer:
 
 class Agent:
     _replay_buffer: ReplayBuffer
-    _q_model: DDDQN
-    _target_model: DDDQN
+    _q_model: DDQN
+    _target_model: DDQN
     _model_version: int
     _epsilon: float
     _episode_rewards: List[float]
 
-    def __init__(self, q_net: DDDQN):
+    def __init__(self, q_net: DDQN):
         self._replay_buffer = ReplayBuffer()
         self._q_model = q_net
-        self._target_model = DDDQN()
+        self._target_model = DDQN()
         self._target_model.set_weights(self._q_model.get_weights())
         self._model_version = 0
         self._epsilon = EPSILON
@@ -158,7 +141,7 @@ class Agent:
 
     def _policy(self, x: Tensor or ndarray) -> int or ndarray[int]:
         if self._epsilon < uniform(0, 1):
-            action: ndarray[int] = argmax(self._q_model.advantage(x))
+            action: ndarray[int] = argmax(self._q_model(x))
             return action
         else:
             action: int = randint(0, 3)
@@ -272,18 +255,18 @@ class Agent:
         print('Time: {}s'.format(end - start))
 
     @property
-    def model(self) -> DDDQN:
+    def model(self) -> DDQN:
         return self._q_model
 
     @property
-    def target_model(self) -> DDDQN:
+    def target_model(self) -> DDQN:
         return self._target_model
 
 
-def visualize(model: DDDQN):
+def visualize(model: DDQN):
     state: ndarray = env.reset()
     for _ in range(MAX_STEPS):
-        action = argmax(model.advantage(state))
+        action = argmax(model(state))
         state, reward, done, info = env.step(action)
         print(reward)
         env.render()
@@ -314,7 +297,7 @@ if __name__ == '__main__':
                                    array([-0.5, 0.5, 0])]
     env: gym.Env = create_environment()
 
-    dddqn: DDDQN = DDDQN()
+    dddqn: DDQN = DDQN()
     huber: Loss = Huber()
     adam: Optimizer = Adam(LEARNING_RATE)
 
@@ -323,7 +306,7 @@ if __name__ == '__main__':
     checkpoint: tf.train.Checkpoint = tf.train.Checkpoint(q_model=dddqn, optimizer=adam,
                                                           target_model=agent.target_model)
     manager: tf.train.CheckpointManager = tf.train.CheckpointManager(checkpoint, 'car_racing/', max_to_keep=3)
-    # checkpoint.restore(manager.latest_checkpoint)
+    checkpoint.restore(manager.latest_checkpoint)
 
     visualize(agent.model)
 
