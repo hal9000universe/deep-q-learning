@@ -204,6 +204,15 @@ class Agent:
         self._q_model(test_input)
         self._target_model(test_input)
 
+    @staticmethod
+    def _check_early_stop(neg_reward_counter: int) -> Tuple[bool, float]:
+        done: bool = (neg_reward_counter > MAX_NEG_REWARD)
+        if done:
+            punishment: float = -80
+            return done, punishment
+        else:
+            return False, 0.0
+
     def training(self):
         self._build()
         start: float = time.time()
@@ -211,6 +220,7 @@ class Agent:
         for episode in range(MAX_EPISODES):
             print('Starting episode ...')
             episode_reward: float = 0.
+            neg_reward_counter: int = 0
             state: ndarray = env.reset()
             for step in range(1, MAX_STEPS + 1):
                 step_count += 1
@@ -220,6 +230,14 @@ class Agent:
 
                 if step == MAX_STEPS:
                     done = True
+
+                if reward < 0:
+                    neg_reward_counter += 1
+
+                early_stop_info: Tuple[bool, float] = self._check_early_stop(neg_reward_counter)
+                if early_stop_info[0]:
+                    done = early_stop_info[0]
+                    reward += early_stop_info[1]
 
                 self._replay_buffer.add(state[0], action, reward, observation[0], done)
                 state = observation
@@ -299,6 +317,7 @@ if __name__ == '__main__':
     GAMMA: float = 0.999
     LEARNING_RATE: float = 0.001
     REGULARIZATION_FACTOR: float = 0.001
+    MAX_NEG_REWARD: int = 100
 
     # set-up environment
     cont_ac_list: List[ndarray] = [array([0, 1, 0]), array([1, 1, 0]), array([-1, 1, 0]), array([0.5, 1, 0]),
@@ -318,9 +337,4 @@ if __name__ == '__main__':
     manager: tf.train.CheckpointManager = tf.train.CheckpointManager(checkpoint, 'car_racing/', max_to_keep=3)
     checkpoint.restore(manager.latest_checkpoint)
 
-    # visualize(agent.model)
-
     agent.training()
-
-
-# TODO: implement early episode stopping mechanism
