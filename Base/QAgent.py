@@ -30,19 +30,63 @@ class Agent:
     _model_version: int
     _epsilon: float
     _episode_rewards: List[float]
+    _env: gym.Env
+    _optimizer: Optimizer
+    _loss: Loss
+    _batch_size: int
+    _max_steps: int
+    _max_episodes: int
+    _replace_frequency: int
+    _back_up_frequency: int
+    _training_start: int
+    _train_frequency: int
+    _epsilon_decay_rate: float
+    _min_epsilon: float
+    _gamma: float
+    _manager: tf.train.CheckpointManager
 
-    def __init__(self, q_net: DQN):
-        buffer_size: int = 100000
+    def __init__(self, buffer_size: int,
+                 q_model: DQN,
+                 epsilon: float,
+                 env: gym.Env,
+                 optimizer: Optimizer,
+                 loss: Loss,
+                 batch_size: int,
+                 max_steps: int,
+                 max_episodes: int,
+                 replace_frequency: int,
+                 back_up_frequency: int,
+                 training_start: int,
+                 train_frequency: int,
+                 epsilon_decay_rate: float,
+                 min_epsilon: float,
+                 gamma: float,
+                 manager: tf.train.CheckpointManager,
+                 ):
         self._replay_buffer = ReplayBuffer(buffer_size=buffer_size, obs_shape=(buffer_size, 9))
-        self._q_model = q_net
+        self._q_model = q_model
         self._target_model = DQN()
         self._target_model.set_weights(self._q_model.get_weights())
         self._model_version = 0
-        self._epsilon = EPSILON
+        self._epsilon = epsilon
         self._episode_rewards = []
+        self._env = env
+        self._optimizer = optimizer
+        self._loss = loss
+        self._batch_size = batch_size
+        self._max_steps = max_steps
+        self._max_episodes = max_episodes
+        self._replace_frequency = replace_frequency
+        self._back_up_frequency = back_up_frequency
+        self._training_start = training_start
+        self._train_frequency = train_frequency
+        self._epsilon_decay_rate = epsilon_decay_rate
+        self._min_epsilon = min_epsilon
+        self._gamma = gamma
+        self._manager = manager
 
     def _update_epsilon(self):
-        self._epsilon = max(self._epsilon * EPSILON_DECAY_RATE, MIN_EPSILON)
+        self._epsilon = max(self._epsilon * self._epsilon_decay_rate, self._min_epsilon)
 
     def _update_episode_rewards(self, episode_reward: float):
         self._episode_rewards.append(episode_reward)
@@ -74,9 +118,9 @@ class Agent:
             if dones[index]:
                 target_val: float = rewards[index]
             else:
-                target_val: float = rewards[index] + GAMMA * next_q_tm[index, action] - q[index, actions[index]]
+                target_val: float = rewards[index] + self._gamma * next_q_tm[index, action] - q[index, actions[index]]
             q_target: Tensor = cast(q[index], dtype=float64) + one_hot(
-                actions[index], env.action_space.n, on_value=cast(target_val, dtype=float64))
+                actions[index], self._env.action_space.n, on_value=cast(target_val, dtype=float64))
             targets.append(q_target)
         targets: Tensor = convert_to_tensor(targets, dtype=float64)
         return targets
@@ -85,9 +129,9 @@ class Agent:
     def _train_step(self, states: Tensor, q_targets: Tensor):
         with GradientTape() as tape:
             Q: Tensor = self._q_model(states)
-            loss: Tensor = huber(q_targets, Q)
+            loss: Tensor = self._loss(q_targets, Q)
         grads: List[Tensor] = tape.gradient(loss, self._q_model.trainable_variables)
-        adam.apply_gradients(zip(grads, self._q_model.trainable_variables))
+        self._optimizer.apply_gradients(zip(grads, self._q_model.trainable_variables))
 
     @staticmethod
     def _preprocess(batch: Tuple[ndarray, ndarray, ndarray, ndarray, ndarray]
@@ -97,30 +141,32 @@ class Agent:
         return states, batch[1], batch[2], observations, batch[4]
 
     def _build(self):
-        test_input: ndarray = env.reset()
+        test_input: ndarray = self._env.reset()
         self._q_model(test_input)
         self._target_model(test_input)
 
     def training(self):
         self._build()
         step_count: int = 0
-        for episode in range(MAX_EPISODES):
+        for episode in range(self._max_episodes):
             episode_reward: float = 0.
-            state: ndarray = env.reset()
-            for step in range(1, MAX_STEPS + 1):
+            state: ndarray = self._env.reset()
+            for step in range(1, self._max_steps + 1):
                 step_count += 1
                 action: int = self._policy(state)
-                observation, reward, done, info = env.step(action)
+                observation, reward, done, info = self._env.step(action)
 
-                if step == MAX_STEPS:
+                if step == self._max_steps:
                     done = True
 
                 self._replay_buffer.add(state[0], action, reward, observation[0], done)
                 state = observation
                 episode_reward += reward
 
-                if self._replay_buffer.size >= TRAINING_START and step_count % TRAIN_FREQUENCY == 0:
-                    batch: Tuple[ndarray, ndarray, ndarray, ndarray, ndarray] = self._replay_buffer.sample_batch(BATCH_SIZE)
+                if self._replay_buffer.size >= self._training_start and step_count % self._train_frequency == 0:
+                    batch: Tuple[ndarray, ndarray, ndarray, ndarray, ndarray] = self._replay_buffer.sample_batch(
+                        self._batch_size
+                    )
                     states, actions, rewards, observations, dones = self._preprocess(batch)
                     q_targets: Tensor = self._compute_q_targets(states, actions, rewards, observations, dones)
                     self._train_step(states, q_targets)
@@ -128,11 +174,11 @@ class Agent:
                 if done:
                     break
 
-                if step_count % REPLACE_FREQUENCY == 0:
+                if step_count % self._replace_frequency == 0:
                     self._update_target_model()
 
-            if episode % BACKUP_FREQUENCY == 0:
-                manager.save()
+            if episode % self._back_up_frequency == 0:
+                self._manager.save()
 
             self._update_epsilon()
             self._update_episode_rewards(episode_reward)
@@ -146,23 +192,3 @@ class Agent:
     @property
     def target_model(self) -> DQN:
         return self._target_model
-
-
-if __name__ == '__main__':
-    BATCH_SIZE: int
-    MAX_STEPS: int
-    MAX_EPISODES: int
-    REPLACE_FREQUENCY: int
-    BACKUP_FREQUENCY: int
-    TRAINING_START: int
-    TRAIN_FREQUENCY: int
-    EPSILON: float
-    EPSILON_DECAY_RATE: float
-    MIN_EPSILON: float
-    GAMMA: float
-    LEARNING_RATE: float
-    REGULARIZATION_FACTOR: float
-    adam: Optimizer
-    huber: Loss
-    manager: tf.train.CheckpointManager
-    env: gym.Env
