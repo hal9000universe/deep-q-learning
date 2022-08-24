@@ -224,7 +224,7 @@ class Agent:
                 step_count += 1
                 action: int = self._policy(state)
                 observation, reward, done, info = env.step(action)
-                env.render()
+                # env.render()
 
                 print(reward)
 
@@ -326,4 +326,7 @@ if __name__ == '__main__':
     manager: tf.train.CheckpointManager = tf.train.CheckpointManager(checkpoint, 'car_racing/', max_to_keep=3)
     checkpoint.restore(manager.latest_checkpoint)
 
+    # visualize(agent.model)
+
     agent.training()
+

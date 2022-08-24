@@ -194,10 +194,12 @@ class Agent:
                 episode_reward += reward
 
                 if self._replay_buffer.size >= TRAINING_START and step_count % TRAIN_FREQUENCY == 0:
+
+                    sampling_start: float = time.time()
                     batch: Tuple[ndarray, ndarray, ndarray, ndarray, ndarray] = self._replay_buffer.sample_batch(BATCH_SIZE)
-                    states, actions, rewards, observations, dones = self._preprocess(batch)
-                    q_targets: Tensor = self._compute_q_targets(states, actions, rewards, observations, dones)
-                    self._train_step(states, q_targets)
+                    sampling_end: float = time.time()
+                    print('Sampling time: {}'.format(sampling_end - sampling_start))
+                    preprocessing_start: float = time.time()
 
                 if done:
                     break
@@ -268,7 +270,7 @@ if __name__ == '__main__':
     checkpoint.restore(manager.latest_checkpoint)
 
     # train
-    # agent.training()
+    agent.training()
 
     # visualize trained agent
     for _ in range(10):
