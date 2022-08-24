@@ -25,8 +25,7 @@ class DDQN(Model, ABC):
     _max_pool1: MaxPooling3D
     _max_pool2: MaxPooling3D
     _flatten: Flatten
-    _dense1: Dense
-    _dense2: Dense
+    _dense: Dense
     _q: Dense
 
     def __init__(self):
@@ -39,8 +38,7 @@ class DDQN(Model, ABC):
         self._max_pool1 = MaxPooling3D((1, 2, 2))
         self._max_pool2 = MaxPooling3D((1, 2, 2))
         self._flatten = Flatten()
-        self._dense1 = Dense(128, activation='relu', kernel_regularizer=l2(REGULARIZATION_FACTOR))
-        self._dense2 = Dense(64, activation='relu', kernel_regularizer=l2(REGULARIZATION_FACTOR))
+        self._dense = Dense(64, activation='relu', kernel_regularizer=l2(REGULARIZATION_FACTOR))
         self._q = Dense(env.action_space.n, activation='linear')
 
     def call(self, x: ndarray, training: bool = False, mask=None) -> Tensor:
@@ -51,8 +49,7 @@ class DDQN(Model, ABC):
         x = self._max_pool2(x)
         x = self._batch_norm2(x)
         x = self._flatten(x)
-        x = self._dense1(x)
-        x = self._dense2(x)
+        x = self._dense(x)
         Q = self._q(x)
         return Q
 
@@ -204,6 +201,16 @@ class Agent:
         self._q_model(test_input)
         self._target_model(test_input)
 
+    @staticmethod
+    def _check_early_stop(non_positive_counter: int) -> Tuple[bool, float]:
+        done: bool = (non_positive_counter > MAX_NON_POSITIVE)
+        if done:
+            print('Stopping early')
+            punishment: float = -80
+            return done, punishment
+        else:
+            return False, 0.0
+
     def training(self):
         self._build()
         start: float = time.time()
@@ -211,6 +218,7 @@ class Agent:
         for episode in range(MAX_EPISODES):
             print('Starting episode ...')
             episode_reward: float = 0.
+            non_positive_counter: int = 0
             state: ndarray = env.reset()
             for step in range(1, MAX_STEPS + 1):
                 step_count += 1
@@ -218,43 +226,42 @@ class Agent:
                 observation, reward, done, info = env.step(action)
                 # env.render()
 
+                print(reward)
+
                 if step == MAX_STEPS:
                     done = True
+
+                if reward <= 0:
+                    non_positive_counter += 1
+                else:
+                    non_positive_counter = 0
+
+                early_stop, punishment = self._check_early_stop(non_positive_counter)
+                if early_stop:
+                    done = early_stop
+                    reward += punishment
 
                 self._replay_buffer.add(state[0], action, reward, observation[0], done)
                 state = observation
                 episode_reward += reward
 
                 if self._replay_buffer.size >= TRAINING_START and step_count % TRAIN_FREQUENCY == 0:
-                    print('Training step: {}'.format(step_count))
-                    sampling_start: float = time.time()
                     batch: Tuple[ndarray, ndarray, ndarray, ndarray, ndarray] = self._replay_buffer.sample_batch(
                         BATCH_SIZE)
-                    sampling_end: float = time.time()
-                    print('Sampling time: {}'.format(sampling_end - sampling_start))
-                    preprocessing_start: float = time.time()
                     states, actions, rewards, observations, dones = self._preprocess(batch)
-                    preprocessing_end: float = time.time()
-                    print('Preprocessing time: {}'.format(preprocessing_end - preprocessing_start))
-                    q_start: float = time.time()
                     q_targets: Tensor = self._compute_q_targets(states, actions, rewards, observations, dones)
-                    q_end: float = time.time()
-                    print('Q-time: {}'.format(q_end - q_start))
-                    train_start: float = time.time()
                     self._train_step(states, q_targets)
-                    train_end: float = time.time()
-                    print('Training time: {}'.format(train_end - train_start))
 
                 if done:
                     break
 
-                if step % BACKUP_FREQUENCY == 0:
+                if step_count % BACKUP_FREQUENCY == 0:
                     print('Saving model ...')
                     manager.save()
 
-                if step % REPLACE_FREQUENCY == 0:
-                    print('Updating target model ...')
-                    self._update_target_model()
+            if episode % REPLACE_FREQUENCY == 0:
+                print('Updating target model ...')
+                self._update_target_model()
 
             self._update_epsilon()
             self._update_episode_rewards(episode_reward)
@@ -287,18 +294,19 @@ def visualize(model: DDQN):
 if __name__ == '__main__':
     # hyperparameters
     BATCH_SIZE: int = 64
-    MAX_STEPS: int = 1000
+    MAX_STEPS: int = 50000
     MAX_EPISODES: int = 1000
-    REPLACE_FREQUENCY: int = 200
-    BACKUP_FREQUENCY: int = 250
+    REPLACE_FREQUENCY: int = 10000
+    BACKUP_FREQUENCY: int = 100
     TRAINING_START: int = 256
-    TRAIN_FREQUENCY: int = 10
-    EPSILON: float = 0.8
+    TRAIN_FREQUENCY: int = 1
+    EPSILON: float = 1.0
     EPSILON_DECAY_RATE: float = 0.995
-    MIN_EPSILON: float = 0.001
+    MIN_EPSILON: float = 0.02
     GAMMA: float = 0.999
     LEARNING_RATE: float = 0.001
     REGULARIZATION_FACTOR: float = 0.001
+    MAX_NON_POSITIVE: int = 50
 
     # set-up environment
     cont_ac_list: List[ndarray] = [array([0, 1, 0]), array([1, 1, 0]), array([-1, 1, 0]), array([0.5, 1, 0]),
@@ -322,5 +330,3 @@ if __name__ == '__main__':
 
     agent.training()
 
-
-# TODO: implement early episode stopping mechanism

@@ -194,31 +194,21 @@ class Agent:
                 episode_reward += reward
 
                 if self._replay_buffer.size >= TRAINING_START and step_count % TRAIN_FREQUENCY == 0:
+
                     sampling_start: float = time.time()
                     batch: Tuple[ndarray, ndarray, ndarray, ndarray, ndarray] = self._replay_buffer.sample_batch(BATCH_SIZE)
                     sampling_end: float = time.time()
                     print('Sampling time: {}'.format(sampling_end - sampling_start))
                     preprocessing_start: float = time.time()
-                    states, actions, rewards, observations, dones = self._preprocess(batch)
-                    preprocessing_end: float = time.time()
-                    print('Preprocessing time: {}'.format(preprocessing_end - preprocessing_start))
-                    q_start: float = time.time()
-                    q_targets: Tensor = self._compute_q_targets(states, actions, rewards, observations, dones)
-                    q_end: float = time.time()
-                    print('Q-time: {}'.format(q_end - q_start))
-                    train_start: float = time.time()
-                    self._train_step(states, q_targets)
-                    train_end: float = time.time()
-                    print('Training time: {}'.format(train_end - train_start))
 
                 if done:
                     break
 
+                if step_count % REPLACE_FREQUENCY == 0:
+                    self._update_target_model()
+
             if episode % BACKUP_FREQUENCY == 0:
                 manager.save()
-
-            if episode % REPLACE_FREQUENCY == 0:
-                self._update_target_model()
 
             self._update_epsilon()
             self._update_episode_rewards(episode_reward)
@@ -254,15 +244,15 @@ if __name__ == '__main__':
     # hyperparameters
     BATCH_SIZE: int = 64
     MAX_STEPS: int = 1000
-    MAX_EPISODES: int = 1000
-    REPLACE_FREQUENCY: int = 50
+    MAX_EPISODES: int = 10000
+    REPLACE_FREQUENCY: int = 20
     BACKUP_FREQUENCY: int = 100
     TRAINING_START: int = 256
     TRAIN_FREQUENCY: int = 4
-    EPSILON: float = 0.3
+    EPSILON: float = 1.0
     EPSILON_DECAY_RATE: float = 0.995
-    MIN_EPSILON: float = 0.001
-    GAMMA: float = 0.999
+    MIN_EPSILON: float = 0.02
+    GAMMA: float = 0.995
     LEARNING_RATE: float = 0.001
     REGULARIZATION_FACTOR: float = 0.001
 
@@ -283,5 +273,5 @@ if __name__ == '__main__':
     agent.training()
 
     # visualize trained agent
-    for _ in range(1):
+    for _ in range(10):
         visualize(agent.model)
