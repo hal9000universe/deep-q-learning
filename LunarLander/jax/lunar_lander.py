@@ -117,7 +117,7 @@ class Agent:
     def _policy(self, x: ndarray) -> int or ndarray:
         if self._epsilon < uniform(0, 1):
             action: ndarray = argmax(self._q_model.apply(self._params, x))
-            return action
+            return int(action)
         else:
             action: int = randint(0, 3)
             return action
@@ -129,7 +129,7 @@ class Agent:
                            observations: ndarray, dones: ndarray) -> jnp.ndarray:
         q: ndarray = self._q_model.apply(self._params, states)
         next_q: ndarray = self._q_model.apply(self._params, observations)
-        next_q_tm: ndarray = self._q_model.apply(observations)
+        next_q_tm: ndarray = self._q_model.apply(self._target_params, observations)
         max_actions: ndarray = argmax(next_q, axis=1)
         targets: List = []
         for index, action in enumerate(max_actions):
@@ -138,7 +138,7 @@ class Agent:
             else:
                 target_val: float = rewards[index] + GAMMA * next_q_tm[index, action] - q[index, actions[index]]
             q_target: ndarray = cast(q[index], dtype=float64) + one_hot(
-                actions[index], env.action_space.n, on_value=cast(target_val, dtype=float64))
+                actions[index], env.action_space.n,) * cast(target_val, dtype=float64)
             targets.append(q_target)
         targets: ndarray = jnp.array(targets)
         return targets
@@ -188,6 +188,9 @@ class Agent:
 
                 if done:
                     break
+
+            if episode == REPLACE_FREQUENCY:
+                self._update_target_model()
 
             self._update_epsilon()
             self._update_episode_rewards(episode_reward)
