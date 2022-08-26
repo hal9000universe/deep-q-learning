@@ -7,8 +7,9 @@ import gym
 
 import time
 from typing import Callable, Mapping, Tuple, List, NamedTuple
-from numpy import ndarray, zeros, float64, int64, random, mean, argmax, cast, one_hot, append, newaxis
+from numpy import ndarray, zeros, float64, int64, random, mean, argmax, cast, append, newaxis
 from numpy.random import uniform, randint
+from jax.nn import one_hot
 
 
 class TrainingState(NamedTuple):
@@ -166,6 +167,7 @@ class Agent:
                 step_count += 1
                 fraction_finished: float = (step + 1) / MAX_STEPS
                 action: int = self._policy(state)
+                print(action)
                 observation, reward, done, info = env.step(action)
                 observation = append(observation, fraction_finished)
                 observation: ndarray = observation[newaxis, ...]
@@ -214,11 +216,12 @@ if __name__ == '__main__':
     env: gym.Env = gym.make('LunarLander-v2')
 
     rng: jax.random.PRNGKeyArray = jax.random.PRNGKey(0)
-    test_input: jnp.ndarray = jnp.zeros((64, 8))
+    test_input: np.ndarray = zeros((1, 9))
 
     model: hk.Transformed = hk.without_apply_rng(hk.transform(lambda *args: Model()(*args)))
     optimizer: optax.adam = optax.adam(1e-3)
     loss: Callable = optax.huber_loss
+
     parameters: hk.Params = model.init(rng, test_input)
     optimizer_state: Mapping = optimizer.init(parameters)
 
