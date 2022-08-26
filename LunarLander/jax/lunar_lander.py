@@ -7,7 +7,7 @@ import gym
 
 import time
 from typing import Callable, Mapping, Tuple, List, NamedTuple
-from numpy import ndarray, zeros, float64, int64, random, mean, argmax, cast, append, newaxis
+from numpy import ndarray, zeros, float64, int64, random, mean, argmax, append, newaxis
 from numpy.random import uniform, randint
 from jax.nn import one_hot
 
@@ -84,6 +84,19 @@ class ReplayBuffer:
         return batch
 
 
+@jax.jit
+def train_step(train_state: TrainingState, network: hk.Transformed, optimiser: optax.adam,
+                states: jnp.ndarray, q_targets: jnp.ndarray):
+    grads = jax.grad(loss)(network.apply(train_state.params, states), q_targets)
+    updates, opt_state = optimiser.update(grads, train_state.opt_state)
+    params = optax.apply_updates(train_state.params, updates)
+    # Compute avg_params, the exponential moving average of the "live" params.
+    # We use this only for evaluation (cf. https://doi.org/10.1137/0330046).
+    avg_params = optax.incremental_update(
+        params, train_state.avg_params, step_size=0.001)
+    return TrainingState(params, avg_params, opt_state)
+
+
 class Agent:
     _replay_buffer: ReplayBuffer
     _q_model: hk.Transformed
@@ -137,23 +150,11 @@ class Agent:
                 target_val: float = rewards[index]
             else:
                 target_val: float = rewards[index] + GAMMA * next_q_tm[index, action] - q[index, actions[index]]
-            q_target: ndarray = cast(q[index], dtype=float64) + one_hot(
-                actions[index], env.action_space.n,) * cast(target_val, dtype=float64)
+            q_target: ndarray = q[index] + one_hot(
+                jnp.array(actions[index]), env.action_space.n,) * target_val
             targets.append(q_target)
         targets: ndarray = jnp.array(targets)
         return targets
-
-    @jax.jit
-    def _train_step(self, train_state: TrainingState, network: hk.Transformed, optimiser: optax.adam,
-                    states: jnp.ndarray, q_targets: jnp.ndarray):
-        grads = jax.grad(loss)(network.apply(train_state.params, states), q_targets)
-        updates, opt_state = optimiser.update(grads, train_state.opt_state)
-        params = optax.apply_updates(train_state.params, updates)
-        # Compute avg_params, the exponential moving average of the "live" params.
-        # We use this only for evaluation (cf. https://doi.org/10.1137/0330046).
-        avg_params = optax.incremental_update(
-            params, train_state.avg_params, step_size=0.001)
-        return TrainingState(params, avg_params, opt_state)
 
     def training(self):
         start: float = time.time()
@@ -184,7 +185,7 @@ class Agent:
                     states, actions, rewards, observations, dones = self._replay_buffer.sample_batch(BATCH_SIZE)
                     states: jnp.ndarray = jax.numpy.asarray(states)
                     q_targets: jnp.ndarray = self._compute_q_targets(states, actions, rewards, observations, dones)
-                    self._train_step(self._train_state, self._q_model, self._optimizer, states, q_targets)
+                    train_step(self._train_state, self._q_model, self._optimizer, states, q_targets)
 
                 if done:
                     break
