@@ -6,8 +6,14 @@ import optax
 import gym
 
 import time
-from typing import Callable, Mapping, Tuple, List
+from typing import Callable, Mapping, Tuple, List, NamedTuple
 from numpy import ndarray, zeros, float64, int64, random, mean, uniform, argmax, randint, cast, one_hot, append, newaxis
+
+
+class TrainingState(NamedTuple):
+  params: hk.Params
+  avg_params: hk.Params
+  opt_state: optax.OptState
 
 
 class Model(hk.Module):
@@ -79,7 +85,6 @@ class ReplayBuffer:
 class Agent:
     _replay_buffer: ReplayBuffer
     _q_model: hk.Transformed
-    _target_model: hk.Transformed
     _model_version: int
     _epsilon: float
     _episode_rewards: List[float]
@@ -90,7 +95,6 @@ class Agent:
         self._q_model = q_net
         self._params = params
         self._target_params = params
-        self._target_model = q_net
         self._model_version = 0
         self._epsilon = EPSILON
         self._episode_rewards = []
@@ -115,13 +119,13 @@ class Agent:
             return action
 
     def _update_target_model(self):
-        self._target_model.set_weights(self._q_model.get_weights())
+        self._target_params = self._params
 
     def _compute_q_targets(self, states: ndarray, actions: ndarray, rewards: ndarray,
-                           observations: ndarray, dones: ndarray) -> ndarray:
-        q: ndarray = self._q_model(states)
-        next_q: ndarray = self._q_model(observations)
-        next_q_tm: ndarray = self._target_model(observations)
+                           observations: ndarray, dones: ndarray) -> jnp.ndarray:
+        q: ndarray = self._q_model.apply(self._params, states)
+        next_q: ndarray = self._q_model.apply(self._params, observations)
+        next_q_tm: ndarray = self._q_model.apply(observations)
         max_actions: ndarray = argmax(next_q, axis=1)
         targets: List = []
         for index, action in enumerate(max_actions):
@@ -132,15 +136,22 @@ class Agent:
             q_target: ndarray = cast(q[index], dtype=float64) + one_hot(
                 actions[index], env.action_space.n, on_value=cast(target_val, dtype=float64))
             targets.append(q_target)
-        targets: ndarray = targets
+        targets: ndarray = jnp.array(targets)
         return targets
 
     @jax.jit
-    def _train_step(self, states: ndarray, q_targets: ndarray):
-        pass
+    def _train_step(self, train_state: TrainingState, network: hk.Transformed,
+                    states: jnp.ndarray, q_targets: jnp.ndarray, optimiser: optax.adam):
+        grads = jax.grad(loss)(network.apply(train_state.params, states), q_targets)
+        updates, opt_state = optimiser.update(grads, train_state.opt_state)
+        params = optax.apply_updates(train_state.params, updates)
+        # Compute avg_params, the exponential moving average of the "live" params.
+        # We use this only for evaluation (cf. https://doi.org/10.1137/0330046).
+        avg_params = optax.incremental_update(
+            params, train_state.avg_params, step_size=0.001)
+        return TrainingState(params, avg_params, opt_state)
 
     def training(self):
-        self._build()
         start: float = time.time()
         step_count: int = 0
         for episode in range(MAX_EPISODES):
@@ -166,7 +177,8 @@ class Agent:
 
                 if self._replay_buffer.size >= TRAINING_START and step_count % TRAIN_FREQUENCY == 0:
                     states, actions, rewards, observations, dones = self._replay_buffer.sample_batch(BATCH_SIZE)
-                    q_targets: ndarray = self._compute_q_targets(states, actions, rewards, observations, dones)
+                    states: jnp.ndarray = jax.numpy.asarray(states)
+                    q_targets: jnp.ndarray = self._compute_q_targets(states, actions, rewards, observations, dones)
                     self._train_step(states, q_targets)
 
                 if done:
@@ -205,7 +217,7 @@ if __name__ == '__main__':
     optimizer: optax.adam = optax.adam(1e-3)
     loss: Callable = optax.huber_loss
     parameters: hk.Params = model.init(rng, test_input)
-    opt_state: Mapping = optimizer.init(parameters)
+    optimizer_state: Mapping = optimizer.init(parameters)
 
     output: np.ndarray = model.apply(parameters, test_input)
     print(output.shape)
