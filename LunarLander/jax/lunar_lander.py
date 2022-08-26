@@ -84,10 +84,9 @@ class ReplayBuffer:
         return batch
 
 
-@jax.jit
 def train_step(train_state: TrainingState, network: hk.Transformed, optimiser: optax.adam,
-                states: jnp.ndarray, q_targets: jnp.ndarray):
-    grads = jax.grad(loss)(network.apply(train_state.params, states), q_targets)
+               loss_fn: Callable, states: jnp.ndarray, q_targets: jnp.ndarray):
+    grads = jax.grad(loss_fn)(train_state.params, network, states, q_targets)
     updates, opt_state = optimiser.update(grads, train_state.opt_state)
     params = optax.apply_updates(train_state.params, updates)
     # Compute avg_params, the exponential moving average of the "live" params.
@@ -104,12 +103,14 @@ class Agent:
     _epsilon: float
     _episode_rewards: List[float]
 
-    def __init__(self, q_net, params: hk.Params, opt: optax.adam, opt_state: Mapping):
+    def __init__(self, q_net, params: hk.Params, opt: optax.adam,
+                 opt_state: Mapping, loss_fn: optax.huber_loss):
         buffer_size: int = 100000
         self._replay_buffer = ReplayBuffer(buffer_size=buffer_size, obs_shape=(buffer_size, 9))
         self._q_model = q_net
         self._train_state = TrainingState(params, params, opt_state)
         self._optimizer = opt
+        self._loss = loss_fn
         self._params = params
         self._target_params = params
         self._model_version = 0
@@ -151,7 +152,7 @@ class Agent:
             else:
                 target_val: float = rewards[index] + GAMMA * next_q_tm[index, action] - q[index, actions[index]]
             q_target: ndarray = q[index] + one_hot(
-                jnp.array(actions[index]), env.action_space.n,) * target_val
+                jnp.array(actions[index]), env.action_space.n, ) * target_val
             targets.append(q_target)
         targets: ndarray = jnp.array(targets)
         return targets
@@ -168,7 +169,6 @@ class Agent:
                 step_count += 1
                 fraction_finished: float = (step + 1) / MAX_STEPS
                 action: int = self._policy(state)
-                print(action)
                 observation, reward, done, info = env.step(action)
                 observation = append(observation, fraction_finished)
                 observation: ndarray = observation[newaxis, ...]
@@ -185,7 +185,7 @@ class Agent:
                     states, actions, rewards, observations, dones = self._replay_buffer.sample_batch(BATCH_SIZE)
                     states: jnp.ndarray = jax.numpy.asarray(states)
                     q_targets: jnp.ndarray = self._compute_q_targets(states, actions, rewards, observations, dones)
-                    train_step(self._train_state, self._q_model, self._optimizer, states, q_targets)
+                    train_step(self._train_state, self._q_model, self._optimizer, compute_loss, states, q_targets)
 
                 if done:
                     break
@@ -200,6 +200,14 @@ class Agent:
 
         end: float = time.time()
         print('Time: {}s'.format(end - start))
+
+
+def compute_loss(params: hk.Params, network: hk.Transformed,
+                 inp: jnp.ndarray, targ: jnp.ndarray) -> jnp.ndarray:
+    pred: jnp.ndarray = network.apply(params, inp)
+    loss_val: jnp.ndarray = jnp.sum(optax.huber_loss(pred, targ))
+    print(loss_val)
+    return loss_val
 
 
 if __name__ == '__main__':
@@ -229,5 +237,5 @@ if __name__ == '__main__':
     parameters: hk.Params = model.init(rng, test_input)
     optimizer_state: Mapping = optimizer.init(parameters)
 
-    agent = Agent(model, parameters, optimizer, optimizer_state)
+    agent = Agent(model, parameters, optimizer, optimizer_state, loss)
     agent.training()
