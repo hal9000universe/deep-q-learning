@@ -7,9 +7,11 @@ import gym
 
 import time
 from typing import Callable, Mapping, Tuple, List, NamedTuple
-from numpy import ndarray, zeros, float64, int64, random, mean, argmax, append, newaxis
-from numpy.random import uniform, randint
+from numpy import ndarray, zeros, float64, int64, argmax, append, newaxis
 from jax.nn import one_hot
+from numpy.random import uniform, randint
+
+from statistics import mean
 
 
 class TrainingState(NamedTuple):
@@ -78,7 +80,7 @@ class ReplayBuffer:
         self._samples = min(self._counter, self._buffer_size)
 
     def sample_batch(self, batch_size: int = 64) -> Tuple[ndarray, ndarray, ndarray, ndarray, ndarray]:
-        random_indices: ndarray = random.randint(0, self._samples - 1, batch_size)
+        random_indices: ndarray = randint(0, self._samples, batch_size)
         batch = (self._states[random_indices], self._actions[random_indices], self._rewards[random_indices],
                  self._observations[random_indices], self._dones[random_indices])
         return batch
@@ -132,7 +134,7 @@ class Agent:
         while len(self._episode_rewards) > 50:
             self._episode_rewards.pop(0)
 
-    def _average_reward(self) -> ndarray:
+    def _average_reward(self) -> float:
         return mean(self._episode_rewards)
 
     def _policy(self, x: ndarray) -> int or ndarray:
@@ -140,8 +142,7 @@ class Agent:
             action: ndarray = argmax(self._q_model.apply(self._params, x))
             return int(action)
         else:
-            action: int = randint(0, 3)
-            return action
+            return randint(0, 4)
 
     def _update_target_model(self):
         self._target_params = self._params
