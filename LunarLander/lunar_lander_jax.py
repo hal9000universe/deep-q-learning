@@ -48,7 +48,7 @@ class ReplayBuffer:
             -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
         self._key, subkey = random.split(self._key)
         random_indices: jnp.ndarray = random.randint(self._key, [batch_size], 0, self._samples - 1)
-        batch = (self._states2[random_indices], self._actions[random_indices], self._rewards[random_indices],
+        batch = (self._states[random_indices], self._actions[random_indices], self._rewards[random_indices],
                  self._observations[random_indices], self._dones[random_indices])
         return batch
 
@@ -87,7 +87,7 @@ class Agent:
     def _policy(self, x: jnp.ndarray) -> jnp.ndarray:
         self._key, subkey = random.split(self._key)
         if self._epsilon < random.uniform(self._key):
-            # return argmax() TODO: output von netz berechnen
+            # return argmax()  TODO: output von netz berechnen
             pass
         else:
             self._key, subkey = random.split(self._key)

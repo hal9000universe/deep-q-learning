@@ -1,49 +1,37 @@
-from abc import ABC
-from typing import List, Tuple
-from random import uniform, randint
-
-import time
-
+import jax
+import jax.numpy as jnp
+import numpy as np
+import haiku as hk
+import optax
 import gym
 
-import tensorflow as tf
-from tensorflow import Tensor, convert_to_tensor, GradientTape, one_hot, float64, Module, cast, function
-from tensorflow.keras import Model
-from tensorflow.keras.layers import Dense
-from tensorflow.keras.losses import Loss, Huber
-from tensorflow.keras.optimizers import Optimizer, Adam
-from tensorflow.keras.regularizers import l2
-
-from numpy import ndarray, newaxis, argmax, append, zeros, random, int64, float64
-from statistics import mean
+import time
+from typing import Callable, Mapping, Tuple, List
+from numpy import ndarray, zeros, float64, int64, random, mean, uniform, argmax, randint, cast, one_hot, append, newaxis
 
 
-class DDDQN(Model, ABC, Module):
-    _d1: Dense
-    _d2: Dense
-    _val: Dense
-    _adv: Dense
+class Model(hk.Module):
+    _lin1: hk.Linear
+    _lin2: hk.Linear
+    _val: hk.Linear
+    _adv: hk.Linear
 
     def __init__(self):
-        super(DDDQN, self).__init__()
-        self._d1 = Dense(64, activation='relu', kernel_regularizer=l2(REGULARIZATION_FACTOR))
-        self._d2 = Dense(64, activation='relu', kernel_regularizer=l2(REGULARIZATION_FACTOR))
-        self._val = Dense(1, activation='linear')
-        self._adv = Dense(env.action_space.n, activation='linear')
+        super().__init__()
+        self._lin1 = hk.Linear(64)
+        self._lin2 = hk.Linear(64)
+        self._val = hk.Linear(1)
+        self._adv = hk.Linear(4)
 
-    def call(self, x: Tensor, training: bool = False, mask=None) -> Tensor:
-        x = self._d1(x)
-        x = self._d2(x)
-        val: Tensor = self._val(x)
-        adv: Tensor = self._adv(x)
-        Q: Tensor = val + adv - tf.math.reduce_mean(adv, axis=1, keepdims=True)
+    def __call__(self, x: np.ndarray or jnp.ndarray) -> np.ndarray or jnp.ndarray:
+        x = self._lin1(x)
+        x = jax.nn.relu(x)
+        x = self._lin2(x)
+        x = jax.nn.relu(x)
+        val: np.ndarray or jnp.ndarray = self._val(x)
+        adv: np.ndarray or jnp.ndarray = self._adv(x)
+        Q: np.ndarray or jnp.ndarray = val + adv - jnp.mean(adv, axis=1, keepdims=True)
         return Q
-
-    def advantage(self, x: Tensor or ndarray) -> Tensor:
-        x = self._d1(x)
-        x = self._d2(x)
-        a: Tensor = self._adv(x)
-        return a
 
 
 class ReplayBuffer:
@@ -90,18 +78,19 @@ class ReplayBuffer:
 
 class Agent:
     _replay_buffer: ReplayBuffer
-    _q_model: DDDQN
-    _target_model: DDDQN
+    _q_model: hk.Transformed
+    _target_model: hk.Transformed
     _model_version: int
     _epsilon: float
     _episode_rewards: List[float]
 
-    def __init__(self, q_net: DDDQN):
+    def __init__(self, q_net, params: hk.Params):
         buffer_size: int = 100000
         self._replay_buffer = ReplayBuffer(buffer_size=buffer_size, obs_shape=(buffer_size, 9))
         self._q_model = q_net
-        self._target_model = DDDQN()
-        self._target_model.set_weights(self._q_model.get_weights())
+        self._params = params
+        self._target_params = params
+        self._target_model = q_net
         self._model_version = 0
         self._epsilon = EPSILON
         self._episode_rewards = []
@@ -114,12 +103,12 @@ class Agent:
         while len(self._episode_rewards) > 50:
             self._episode_rewards.pop(0)
 
-    def _average_reward(self) -> float:
+    def _average_reward(self) -> ndarray:
         return mean(self._episode_rewards)
 
-    def _policy(self, x: Tensor or ndarray) -> int or ndarray:
+    def _policy(self, x: ndarray) -> int or ndarray:
         if self._epsilon < uniform(0, 1):
-            action: ndarray = argmax(self._q_model.advantage(x))
+            action: ndarray = argmax()
             return action
         else:
             action: int = randint(0, 3)
@@ -128,11 +117,11 @@ class Agent:
     def _update_target_model(self):
         self._target_model.set_weights(self._q_model.get_weights())
 
-    def _compute_q_targets(self, states: Tensor, actions: ndarray, rewards: ndarray,
-                           observations: Tensor, dones: ndarray) -> Tensor:
-        q: Tensor = self._q_model(states)
-        next_q: Tensor = self._q_model(observations)
-        next_q_tm: Tensor = self._target_model(observations)
+    def _compute_q_targets(self, states: ndarray, actions: ndarray, rewards: ndarray,
+                           observations: ndarray, dones: ndarray) -> ndarray:
+        q: ndarray = self._q_model(states)
+        next_q: ndarray = self._q_model(observations)
+        next_q_tm: ndarray = self._target_model(observations)
         max_actions: ndarray = argmax(next_q, axis=1)
         targets: List = []
         for index, action in enumerate(max_actions):
@@ -140,33 +129,15 @@ class Agent:
                 target_val: float = rewards[index]
             else:
                 target_val: float = rewards[index] + GAMMA * next_q_tm[index, action] - q[index, actions[index]]
-            q_target: Tensor = cast(q[index], dtype=float64) + one_hot(
+            q_target: ndarray = cast(q[index], dtype=float64) + one_hot(
                 actions[index], env.action_space.n, on_value=cast(target_val, dtype=float64))
             targets.append(q_target)
-        targets: Tensor = convert_to_tensor(targets, dtype=float64)
+        targets: ndarray = targets
         return targets
 
-    @function
-    def _train_step(self, states: Tensor, q_targets: Tensor):
-        with GradientTape() as tape:
-            Q: Tensor = self._q_model(states)
-            loss: Tensor = huber(q_targets, Q)
-        grads: List[Tensor] = tape.gradient(loss, self._q_model.trainable_variables)
-        adam.apply_gradients(zip(grads, self._q_model.trainable_variables))
-
-    @staticmethod
-    def _preprocess(batch: Tuple[ndarray, ndarray, ndarray, ndarray, ndarray]
-                    ) -> Tuple[Tensor, ndarray, ndarray, Tensor, ndarray]:
-        states: Tensor = convert_to_tensor(batch[0], dtype=tf.float64)
-        observations: Tensor = convert_to_tensor(batch[3], dtype=tf.float64)
-        return states, batch[1], batch[2], observations, batch[4]
-
-    def _build(self):
-        test_input: ndarray = env.reset()
-        test_input = append(test_input, 0.)
-        test_input = test_input[newaxis, ...]
-        self._q_model(test_input)
-        self._target_model(test_input)
+    @jax.jit
+    def _train_step(self, states: ndarray, q_targets: ndarray):
+        pass
 
     def training(self):
         self._build()
@@ -194,19 +165,12 @@ class Agent:
                 episode_reward += reward
 
                 if self._replay_buffer.size >= TRAINING_START and step_count % TRAIN_FREQUENCY == 0:
-                    batch: Tuple[ndarray, ndarray, ndarray, ndarray, ndarray] = self._replay_buffer.sample_batch(BATCH_SIZE)
-                    states, actions, rewards, observations, dones = self._preprocess(batch)
-                    q_targets: Tensor = self._compute_q_targets(states, actions, rewards, observations, dones)
+                    states, actions, rewards, observations, dones = self._replay_buffer.sample_batch(BATCH_SIZE)
+                    q_targets: ndarray = self._compute_q_targets(states, actions, rewards, observations, dones)
                     self._train_step(states, q_targets)
 
                 if done:
                     break
-
-            if episode % REPLACE_FREQUENCY == 0:
-                self._update_target_model()
-
-            if episode % BACKUP_FREQUENCY == 0:
-                manager.save()
 
             self._update_epsilon()
             self._update_episode_rewards(episode_reward)
@@ -216,30 +180,8 @@ class Agent:
         end: float = time.time()
         print('Time: {}s'.format(end - start))
 
-    @property
-    def model(self) -> DDDQN:
-        return self._q_model
-
-    @property
-    def target_model(self) -> DDDQN:
-        return self._target_model
-
-
-def visualize(network: DDDQN):
-    state: ndarray = env.reset()
-    for step in range(MAX_STEPS):
-        fraction_finished: float = (step + 1) / MAX_STEPS
-        state = append(state, fraction_finished)
-        state = state[newaxis, ...]
-        action: ndarray = argmax(network.advantage(state))
-        state, reward, done, info = env.step(action)
-        env.render()
-        if done:
-            break
-
 
 if __name__ == '__main__':
-    # hyperparameters
     BATCH_SIZE: int = 64
     MAX_STEPS: int = 1000
     MAX_EPISODES: int = 10000
@@ -254,22 +196,16 @@ if __name__ == '__main__':
     LEARNING_RATE: float = 0.001
     REGULARIZATION_FACTOR: float = 0.001
 
-    # set-up environment
     env: gym.Env = gym.make('LunarLander-v2')
-    dddqn: DDDQN = DDDQN()
-    huber: Loss = Huber()
-    adam: Optimizer = Adam(LEARNING_RATE)
 
-    # set-up agent
-    agent: Agent = Agent(dddqn)
-    checkpoint: tf.train.Checkpoint = tf.train.Checkpoint(q_model=dddqn, optimizer=adam,
-                                                          target_model=agent.target_model, loss=huber)
-    manager: tf.train.CheckpointManager = tf.train.CheckpointManager(checkpoint, 'lunar_lander/', max_to_keep=3)
-    checkpoint.restore(manager.latest_checkpoint)
+    rng: jax.random.PRNGKeyArray = jax.random.PRNGKey(0)
+    test_input: jnp.ndarray = jnp.zeros((64, 8))
 
-    # train
-    agent.training()
+    model: hk.Transformed = hk.without_apply_rng(hk.transform(lambda *args: Model()(*args)))
+    optimizer: optax.adam = optax.adam(1e-3)
+    loss: Callable = optax.huber_loss
+    parameters: hk.Params = model.init(rng, test_input)
+    opt_state: Mapping = optimizer.init(parameters)
 
-    # visualize trained agent
-    for _ in range(10):
-        visualize(agent.model)
+    output: np.ndarray = model.apply(parameters, test_input)
+    print(output.shape)
