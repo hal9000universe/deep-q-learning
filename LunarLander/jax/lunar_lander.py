@@ -7,13 +7,14 @@ import gym
 
 import time
 from typing import Callable, Mapping, Tuple, List, NamedTuple
-from numpy import ndarray, zeros, float64, int64, random, mean, uniform, argmax, randint, cast, one_hot, append, newaxis
+from numpy import ndarray, zeros, float64, int64, random, mean, argmax, cast, one_hot, append, newaxis
+from numpy.random import uniform, randint
 
 
 class TrainingState(NamedTuple):
-  params: hk.Params
-  avg_params: hk.Params
-  opt_state: optax.OptState
+    params: hk.Params
+    avg_params: hk.Params
+    opt_state: optax.OptState
 
 
 class Model(hk.Module):
@@ -89,10 +90,12 @@ class Agent:
     _epsilon: float
     _episode_rewards: List[float]
 
-    def __init__(self, q_net, params: hk.Params):
+    def __init__(self, q_net, params: hk.Params, opt: optax.adam, opt_state: Mapping):
         buffer_size: int = 100000
         self._replay_buffer = ReplayBuffer(buffer_size=buffer_size, obs_shape=(buffer_size, 9))
         self._q_model = q_net
+        self._train_state = TrainingState(params, params, opt_state)
+        self._optimizer = opt
         self._params = params
         self._target_params = params
         self._model_version = 0
@@ -112,7 +115,7 @@ class Agent:
 
     def _policy(self, x: ndarray) -> int or ndarray:
         if self._epsilon < uniform(0, 1):
-            action: ndarray = argmax()
+            action: ndarray = argmax(self._q_model.apply(self._params, x))
             return action
         else:
             action: int = randint(0, 3)
@@ -140,8 +143,8 @@ class Agent:
         return targets
 
     @jax.jit
-    def _train_step(self, train_state: TrainingState, network: hk.Transformed,
-                    states: jnp.ndarray, q_targets: jnp.ndarray, optimiser: optax.adam):
+    def _train_step(self, train_state: TrainingState, network: hk.Transformed, optimiser: optax.adam,
+                    states: jnp.ndarray, q_targets: jnp.ndarray):
         grads = jax.grad(loss)(network.apply(train_state.params, states), q_targets)
         updates, opt_state = optimiser.update(grads, train_state.opt_state)
         params = optax.apply_updates(train_state.params, updates)
@@ -179,7 +182,7 @@ class Agent:
                     states, actions, rewards, observations, dones = self._replay_buffer.sample_batch(BATCH_SIZE)
                     states: jnp.ndarray = jax.numpy.asarray(states)
                     q_targets: jnp.ndarray = self._compute_q_targets(states, actions, rewards, observations, dones)
-                    self._train_step(states, q_targets)
+                    self._train_step(self._train_state, self._q_model, self._optimizer, states, q_targets)
 
                 if done:
                     break
@@ -219,5 +222,5 @@ if __name__ == '__main__':
     parameters: hk.Params = model.init(rng, test_input)
     optimizer_state: Mapping = optimizer.init(parameters)
 
-    output: np.ndarray = model.apply(parameters, test_input)
-    print(output.shape)
+    agent = Agent(model, parameters, optimizer, optimizer_state)
+    agent.training()
