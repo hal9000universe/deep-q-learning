@@ -96,6 +96,13 @@ def train_step(train_state: TrainingState, network: hk.Transformed, optimiser: o
     return TrainingState(params, avg_params, opt_state)
 
 
+def compute_loss(params: hk.Params, network: hk.Transformed,
+                 inp: jnp.ndarray, targ: jnp.ndarray) -> jnp.ndarray:
+    pred: jnp.ndarray = network.apply(params, inp)
+    loss_val: jnp.ndarray = jnp.sum(optax.l2_loss(pred, targ))
+    return loss_val
+
+
 class Agent:
     _replay_buffer: ReplayBuffer
     _q_model: hk.Transformed
@@ -151,8 +158,7 @@ class Agent:
                 target_val: float = rewards[index]
             else:
                 target_val: float = rewards[index] + GAMMA * next_q_tm[index, action] - q[index, actions[index]]
-            q_target: ndarray = q[index] + one_hot(
-                jnp.array(actions[index]), env.action_space.n, ) * target_val
+            q_target: ndarray = q[index] + target_val * one_hot(actions[index], env.action_space.n)
             targets.append(q_target)
         targets: ndarray = jnp.array(targets)
         return targets
@@ -185,12 +191,13 @@ class Agent:
                     states, actions, rewards, observations, dones = self._replay_buffer.sample_batch(BATCH_SIZE)
                     states: jnp.ndarray = jax.numpy.asarray(states)
                     q_targets: jnp.ndarray = self._compute_q_targets(states, actions, rewards, observations, dones)
-                    train_step(self._train_state, self._q_model, self._optimizer, compute_loss, states, q_targets)
+                    self._train_state = train_step(self._train_state, self._q_model, self._optimizer, compute_loss, states, q_targets)
+                    self._params = self._train_state.params
 
                 if done:
                     break
 
-            if episode == REPLACE_FREQUENCY:
+            if episode % REPLACE_FREQUENCY == 0:
                 self._update_target_model()
 
             self._update_epsilon()
@@ -200,14 +207,6 @@ class Agent:
 
         end: float = time.time()
         print('Time: {}s'.format(end - start))
-
-
-def compute_loss(params: hk.Params, network: hk.Transformed,
-                 inp: jnp.ndarray, targ: jnp.ndarray) -> jnp.ndarray:
-    pred: jnp.ndarray = network.apply(params, inp)
-    loss_val: jnp.ndarray = jnp.sum(optax.huber_loss(pred, targ))
-    print(loss_val)
-    return loss_val
 
 
 if __name__ == '__main__':
@@ -223,7 +222,6 @@ if __name__ == '__main__':
     MIN_EPSILON: float = 0.001
     GAMMA: float = 0.999
     LEARNING_RATE: float = 0.001
-    REGULARIZATION_FACTOR: float = 0.001
 
     env: gym.Env = gym.make('LunarLander-v2')
 
@@ -231,7 +229,7 @@ if __name__ == '__main__':
     test_input: np.ndarray = zeros((1, 9))
 
     model: hk.Transformed = hk.without_apply_rng(hk.transform(lambda *args: Model()(*args)))
-    optimizer: optax.adam = optax.adam(1e-3)
+    optimizer: optax.adam = optax.adam(LEARNING_RATE)
     loss: Callable = optax.huber_loss
 
     parameters: hk.Params = model.init(rng, test_input)
