@@ -29,14 +29,14 @@ class Model(hk.Module):
         self._val = hk.Linear(1)
         self._adv = hk.Linear(env.action_space.n)
 
-    def __call__(self, x: np.ndarray or jnp.ndarray) -> np.ndarray or jnp.ndarray:
+    def __call__(self, x: ndarray or jnp.ndarray) -> ndarray or jnp.ndarray:
         x = self._lin1(x)
         x = jax.nn.relu(x)
         x = self._lin2(x)
         x = jax.nn.relu(x)
-        val: np.ndarray or jnp.ndarray = self._val(x)
-        adv: np.ndarray or jnp.ndarray = self._adv(x)
-        Q: np.ndarray or jnp.ndarray = val + adv - jnp.mean(adv, axis=1, keepdims=True)
+        val: ndarray or jnp.ndarray = self._val(x)
+        adv: ndarray or jnp.ndarray = self._adv(x)
+        Q: ndarray or jnp.ndarray = val + adv - jnp.mean(adv, axis=1, keepdims=True)
         return Q
 
 
@@ -99,7 +99,7 @@ def compute_loss(params: hk.Params, inp: jnp.ndarray, targ: jnp.ndarray) -> jnp.
 
 @jax.jit
 def compute_q_targets(params: hk.Params, target_params: hk.Params,
-                      states: ndarray, actions: ndarray, rewards: ndarray,
+                      states: jnp.ndarray, actions: ndarray, rewards: ndarray,
                       observations: ndarray, dones: ndarray) -> jnp.ndarray:
 
     q: ndarray = model.apply(params, states)
@@ -190,7 +190,6 @@ class Agent:
                 if self._replay_buffer.size >= TRAINING_START and step_count % TRAIN_FREQUENCY == 0:
                     states, actions, rewards, observations, dones = self._replay_buffer.sample_batch(BATCH_SIZE)
                     states: jnp.ndarray = jax.numpy.asarray(states)
-
                     dones = dones.astype(float64)
                     q_targets: jnp.ndarray = compute_q_targets(self._params, self._target_params, states,
                                                                actions, rewards, observations, dones)

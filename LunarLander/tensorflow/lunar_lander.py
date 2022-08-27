@@ -194,19 +194,10 @@ class Agent:
                 episode_reward += reward
 
                 if self._replay_buffer.size >= TRAINING_START and step_count % TRAIN_FREQUENCY == 0:
-                    sample_start: float = time.time()
                     batch: Tuple[ndarray, ndarray, ndarray, ndarray, ndarray] = self._replay_buffer.sample_batch(BATCH_SIZE)
                     states, actions, rewards, observations, dones = self._preprocess(batch)
-                    sample_end: float = time.time()
-                    # print("Sampling time: {}s".format(sample_end - sample_start))
-                    q_start: float = time.time()
                     q_targets: Tensor = self._compute_q_targets(states, actions, rewards, observations, dones)
-                    q_end: float = time.time()
-                    # print("Q-value computation time: {}s".format(q_end - q_start))
-                    train_start: float = time.time()
                     self._train_step(states, q_targets)
-                    train_end: float = time.time()
-                    # print("Training time: {}s".format(train_end - train_start))
 
                 if done:
                     break
