@@ -37,7 +37,7 @@ def transform_observation(obs: ndarray) -> ndarray:
 
 
 def create_environment() -> gym.Env:
-    environment: gym.Env = gym.make('CarRacing-v0')
+    environment: gym.Env = gym.make('CarRacing-v1')
     environment = DiscreteActionWrapper(environment, cont_ac_list)
     environment = gym.wrappers.FrameStack(environment, 4)
     environment = gym.wrappers.NormalizeObservation(environment)
@@ -160,7 +160,7 @@ class Agent:
     _episode_rewards: List[float]
 
     def __init__(self, params: hk.Params, opt_state: Mapping):
-        buffer_size: int = 100000
+        buffer_size: int = 1000
         self._replay_buffer = ReplayBuffer(buffer_size=buffer_size, obs_shape=(buffer_size, 4, 96, 96, 3))
         self._params = params
         self._opt_state = opt_state
@@ -199,20 +199,40 @@ class Agent:
         with open("car_racing/params.pickle", "rb") as file:
             self._params = load(file)
 
+    @staticmethod
+    def _check_early_stop(non_positive_counter: int) -> Tuple[bool, float]:
+        done: bool = (non_positive_counter > MAX_NON_POSITIVE)
+        if done:
+            print('Stopping early')
+            punishment: float = -80
+            return done, punishment
+        else:
+            return False, 0.0
+
     def training(self):
         step_count: int = 0
         for episode in range(MAX_EPISODES):
             start: float = time.time()
             episode_reward: float = 0.
+            non_positive_counter: int = 0
             state: ndarray = env.reset()
             for step in range(1, MAX_STEPS + 1):
                 step_count += 1
                 action: int = self._policy(state)
                 observation, reward, done, info = env.step(action)
-                # env.render()
 
                 if step == MAX_STEPS:
                     done: bool = True
+
+                if reward <= 0:
+                    non_positive_counter += 1
+                else:
+                    non_positive_counter = 0
+
+                early_stop, punishment = self._check_early_stop(non_positive_counter)
+                if early_stop:
+                    done = early_stop
+                    reward += punishment
 
                 self._replay_buffer.add(state[0], action, reward, observation[0], done)
                 state = observation
@@ -258,6 +278,7 @@ if __name__ == '__main__':
     MIN_EPSILON: float = 0.001
     GAMMA: float = 0.999
     LEARNING_RATE: float = 0.001
+    MAX_NON_POSITIVE: int = 50
 
     cont_ac_list: List[ndarray] = [array([0, 1, 0]), array([1, 1, 0]), array([-1, 1, 0]), array([0.5, 1, 0]),
                                    array([-0.5, 1, 0]), array([1, 0.1, 0]), array([-1, 0.1, 0]), array([0, 0, 0.8]),
