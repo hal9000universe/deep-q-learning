@@ -116,6 +116,12 @@ def compute_q_targets(params: hk.Params, target_params: hk.Params,
     return targets
 
 
+@jax.jit
+def compute_action(params: hk.Params, state: ndarray) -> ndarray:
+    action: ndarray = argmax(model.apply(params, state))
+    return action
+
+
 class Agent:
     _replay_buffer: ReplayBuffer
     _params: hk.Params
@@ -143,10 +149,9 @@ class Agent:
     def _average_reward(self) -> float:
         return mean(self._episode_rewards)
 
-    def _policy(self, x: ndarray) -> int or ndarray:
+    def _policy(self, state: ndarray) -> int:
         if self._epsilon < uniform(0, 1):
-            action: ndarray = argmax(model.apply(self._params, x))
-            return int(action)
+            return int(compute_action(self._params, state))
         else:
             return randint(0, 4)
 
