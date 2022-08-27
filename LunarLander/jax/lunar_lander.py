@@ -107,7 +107,8 @@ def compute_q_targets(params: hk.Params, target_params: hk.Params,
     max_actions: ndarray = argmax(next_q, axis=1)
     targets: List = []
     for index, action in enumerate(max_actions):
-        target_val: float = rewards[index] + (GAMMA * next_q_tm[index, action] - q[index, actions[index]]) * dones[index]
+        target_val: float = rewards[index] + (GAMMA * next_q_tm[index, action] - q[index, actions[index]]) * \
+                            (1.0 - dones[index])
 
         q_target: ndarray = q[index] + target_val * one_hot(actions[index], env.action_space.n)
         targets.append(q_target)
