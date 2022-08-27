@@ -66,7 +66,7 @@ class ReplayBuffer:
     def size(self) -> int:
         return self._samples
 
-    def add(self, state: ndarray, action: int, reward: float, observation: ndarray, done: bool) -> None:
+    def add(self, state: ndarray, action: int, reward: float, observation: ndarray, done: bool):
         self._states[self._counter % self._buffer_size] = state
         self._actions[self._counter % self._buffer_size] = action
         self._rewards[self._counter % self._buffer_size] = reward
@@ -101,15 +101,14 @@ def compute_loss(params: hk.Params, inp: jnp.ndarray, targ: jnp.ndarray) -> jnp.
 def compute_q_targets(params: hk.Params, target_params: hk.Params,
                       states: jnp.ndarray, actions: ndarray, rewards: ndarray,
                       observations: ndarray, dones: ndarray) -> jnp.ndarray:
-
     q: ndarray = model.apply(params, states)
     next_q: ndarray = model.apply(params, observations)
     next_q_tm: ndarray = model.apply(target_params, observations)
     max_actions: ndarray = argmax(next_q, axis=1)
     targets: List = []
     for index, action in enumerate(max_actions):
-        target_val: float = rewards[index] + (GAMMA * next_q_tm[index, action] - q[index, actions[index]]) * \
-                            (1.0 - dones[index])
+        target_val: float = rewards[index] + \
+                            (1.0 - dones[index]) * (GAMMA * next_q_tm[index, action] - q[index, actions[index]])
 
         q_target: ndarray = q[index] + target_val * one_hot(actions[index], env.action_space.n)
         targets.append(q_target)
@@ -133,10 +132,10 @@ class Agent:
         self._epsilon = EPSILON
         self._episode_rewards = []
 
-    def _update_epsilon(self) -> None:
+    def _update_epsilon(self):
         self._epsilon = max(self._epsilon * EPSILON_DECAY_RATE, MIN_EPSILON)
 
-    def _update_episode_rewards(self, episode_reward: float) -> None:
+    def _update_episode_rewards(self, episode_reward: float):
         self._episode_rewards.append(episode_reward)
         while len(self._episode_rewards) > 50:
             self._episode_rewards.pop(0)
@@ -144,27 +143,27 @@ class Agent:
     def _average_reward(self) -> float:
         return mean(self._episode_rewards)
 
-    def _policy(self, x: ndarray) -> int:
+    def _policy(self, x: ndarray) -> int or ndarray:
         if self._epsilon < uniform(0, 1):
             action: ndarray = argmax(model.apply(self._params, x))
             return int(action)
         else:
             return randint(0, 4)
 
-    def _update_target_model(self) -> None:
+    def _update_target_model(self):
         self._target_params = self._params
 
-    def save(self) -> None:
+    def save(self):
         if not os.path.exists("lunar_lander"):
             os.mkdir("lunar_lander")
         with open("lunar_lander/params.pickle", "wb") as file:
             dump(self._params, file)
 
-    def load(self) -> None:
+    def load(self):
         with open("lunar_lander/params.pickle", "rb") as file:
             self._params = load(file)
 
-    def training(self) -> None:
+    def training(self):
         step_count: int = 0
         for episode in range(MAX_EPISODES):
             start: float = time.time()
@@ -181,7 +180,8 @@ class Agent:
                 observation: ndarray = observation[newaxis, ...]
                 # env.render()
 
-                done = (step == MAX_STEPS)
+                if step == MAX_STEPS:
+                    done: bool = True
 
                 self._replay_buffer.add(state[0], action, reward, observation[0], done)
                 state = observation
