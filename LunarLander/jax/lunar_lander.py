@@ -101,7 +101,7 @@ def train_step(train_state: TrainingState, network: hk.Transformed, optimiser: o
 def compute_loss(params: hk.Params, network: hk.Transformed,
                  inp: jnp.ndarray, targ: jnp.ndarray) -> jnp.ndarray:
     pred: jnp.ndarray = network.apply(params, inp)
-    loss_val: jnp.ndarray = jnp.sum(optax.l2_loss(pred, targ))
+    loss_val: jnp.ndarray = jnp.mean(jnp.sum(optax.l2_loss(pred, targ), axis=1), axis=0)
     return loss_val
 
 
@@ -113,14 +113,13 @@ class Agent:
     _episode_rewards: List[float]
 
     def __init__(self, q_net, params: hk.Params, opt: optax.adam,
-                 opt_state: Mapping, loss_fn: optax.huber_loss):
+                 opt_state: Mapping, loss_fn: Callable):
         buffer_size: int = 100000
         self._replay_buffer = ReplayBuffer(buffer_size=buffer_size, obs_shape=(buffer_size, 9))
         self._q_model = q_net
         self._train_state = TrainingState(params, params, opt_state)
         self._optimizer = opt
         self._loss = loss_fn
-        self._params = params
         self._target_params = params
         self._model_version = 0
         self._epsilon = EPSILON
@@ -139,18 +138,18 @@ class Agent:
 
     def _policy(self, x: ndarray) -> int or ndarray:
         if self._epsilon < uniform(0, 1):
-            action: ndarray = argmax(self._q_model.apply(self._params, x))
+            action: ndarray = argmax(self._q_model.apply(self._train_state.params, x))
             return int(action)
         else:
             return randint(0, 4)
 
     def _update_target_model(self):
-        self._target_params = self._params
+        self._target_params = self._train_state.params
 
     def _compute_q_targets(self, states: ndarray, actions: ndarray, rewards: ndarray,
                            observations: ndarray, dones: ndarray) -> jnp.ndarray:
-        q: ndarray = self._q_model.apply(self._params, states)
-        next_q: ndarray = self._q_model.apply(self._params, observations)
+        q: ndarray = self._q_model.apply(self._train_state.params, states)
+        next_q: ndarray = self._q_model.apply(self._train_state.params, observations)
         next_q_tm: ndarray = self._q_model.apply(self._target_params, observations)
         max_actions: ndarray = argmax(next_q, axis=1)
         targets: List = []
@@ -165,9 +164,9 @@ class Agent:
         return targets
 
     def training(self):
-        start: float = time.time()
         step_count: int = 0
         for episode in range(MAX_EPISODES):
+            start: float = time.time()
             episode_reward: float = 0.
             state: ndarray = env.reset()
             state = append(state, 0.)
@@ -189,11 +188,20 @@ class Agent:
                 episode_reward += reward
 
                 if self._replay_buffer.size >= TRAINING_START and step_count % TRAIN_FREQUENCY == 0:
+                    sample_start: float = time.time()
                     states, actions, rewards, observations, dones = self._replay_buffer.sample_batch(BATCH_SIZE)
+                    sample_end: float = time.time()
+                    # print("Sampling time: {}s".format(sample_end - sample_start))
                     states: jnp.ndarray = jax.numpy.asarray(states)
+                    q_start: float = time.time()
                     q_targets: jnp.ndarray = self._compute_q_targets(states, actions, rewards, observations, dones)
-                    self._train_state = train_step(self._train_state, self._q_model, self._optimizer, compute_loss, states, q_targets)
-                    self._params = self._train_state.params
+                    q_end: float = time.time()
+                    # print("Q-value computation time: {}s".format(q_end - q_start))
+                    train_start: float = time.time()
+                    self._train_state = train_step(self._train_state, self._q_model, self._optimizer, self._loss,
+                                                   states, q_targets)
+                    train_end: float = time.time()
+                    # print("Training time: {}s".format(train_end - train_start))
 
                 if done:
                     break
@@ -206,8 +214,8 @@ class Agent:
             print("Episode: {} -- Reward: {} -- Average: {}".
                   format(episode, episode_reward, self._average_reward()))
 
-        end: float = time.time()
-        print('Time: {}s'.format(end - start))
+            end: float = time.time()
+            print('Time: {}s'.format(end - start))
 
 
 if __name__ == '__main__':
@@ -226,15 +234,14 @@ if __name__ == '__main__':
 
     env: gym.Env = gym.make('LunarLander-v2')
 
-    rng: jax.random.PRNGKeyArray = jax.random.PRNGKey(0)
+    rng: jax.random.PRNGKeyArray = jax.random.PRNGKey(time.time_ns())
     test_input: np.ndarray = zeros((1, 9))
 
     model: hk.Transformed = hk.without_apply_rng(hk.transform(lambda *args: Model()(*args)))
     optimizer: optax.adam = optax.adam(LEARNING_RATE)
-    loss: Callable = optax.huber_loss
 
     parameters: hk.Params = model.init(rng, test_input)
     optimizer_state: Mapping = optimizer.init(parameters)
 
-    agent = Agent(model, parameters, optimizer, optimizer_state, loss)
+    agent = Agent(model, parameters, optimizer, optimizer_state, compute_loss)
     agent.training()
