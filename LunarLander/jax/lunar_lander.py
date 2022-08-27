@@ -66,7 +66,7 @@ class ReplayBuffer:
     def size(self) -> int:
         return self._samples
 
-    def add(self, state: ndarray, action: int, reward: float, observation: ndarray, done: bool):
+    def add(self, state: ndarray, action: int, reward: float, observation: ndarray, done: bool) -> None:
         self._states[self._counter % self._buffer_size] = state
         self._actions[self._counter % self._buffer_size] = action
         self._rewards[self._counter % self._buffer_size] = reward
@@ -101,6 +101,7 @@ def compute_loss(params: hk.Params, inp: jnp.ndarray, targ: jnp.ndarray) -> jnp.
 def compute_q_targets(params: hk.Params, target_params: hk.Params,
                       states: ndarray, actions: ndarray, rewards: ndarray,
                       observations: ndarray, dones: ndarray) -> jnp.ndarray:
+
     q: ndarray = model.apply(params, states)
     next_q: ndarray = model.apply(params, observations)
     next_q_tm: ndarray = model.apply(target_params, observations)
@@ -132,10 +133,10 @@ class Agent:
         self._epsilon = EPSILON
         self._episode_rewards = []
 
-    def _update_epsilon(self):
+    def _update_epsilon(self) -> None:
         self._epsilon = max(self._epsilon * EPSILON_DECAY_RATE, MIN_EPSILON)
 
-    def _update_episode_rewards(self, episode_reward: float):
+    def _update_episode_rewards(self, episode_reward: float) -> None:
         self._episode_rewards.append(episode_reward)
         while len(self._episode_rewards) > 50:
             self._episode_rewards.pop(0)
@@ -143,27 +144,27 @@ class Agent:
     def _average_reward(self) -> float:
         return mean(self._episode_rewards)
 
-    def _policy(self, x: ndarray) -> int or ndarray:
+    def _policy(self, x: ndarray) -> int:
         if self._epsilon < uniform(0, 1):
             action: ndarray = argmax(model.apply(self._params, x))
             return int(action)
         else:
             return randint(0, 4)
 
-    def _update_target_model(self):
+    def _update_target_model(self) -> None:
         self._target_params = self._params
 
-    def save(self):
+    def save(self) -> None:
         if not os.path.exists("lunar_lander"):
             os.mkdir("lunar_lander")
         with open("lunar_lander/params.pickle", "wb") as file:
             dump(self._params, file)
 
-    def load(self):
+    def load(self) -> None:
         with open("lunar_lander/params.pickle", "rb") as file:
             self._params = load(file)
 
-    def training(self):
+    def training(self) -> None:
         step_count: int = 0
         for episode in range(MAX_EPISODES):
             start: float = time.time()
@@ -180,8 +181,7 @@ class Agent:
                 observation: ndarray = observation[newaxis, ...]
                 # env.render()
 
-                if step == MAX_STEPS:
-                    done = True
+                done = (step == MAX_STEPS)
 
                 self._replay_buffer.add(state[0], action, reward, observation[0], done)
                 state = observation
