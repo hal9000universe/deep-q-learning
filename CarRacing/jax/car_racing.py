@@ -10,7 +10,7 @@ import os
 
 import time
 from typing import Mapping, Tuple, List
-from numpy import ndarray, zeros, float64, int64, argmax, append, newaxis, array
+from numpy import ndarray, zeros, float64, int64, argmax, newaxis, array
 from jax.nn import one_hot
 from numpy.random import uniform, randint
 
@@ -46,28 +46,34 @@ def create_environment() -> gym.Env:
 
 
 class Model(hk.Module):
+    _conv1: hk.Conv3D
+    _conv2: hk.Conv3D
+    _batch_norm1: hk.BatchNorm
+    _batch_norm2: hk.BatchNorm
+    _flatten: hk.Flatten
     _lin1: hk.Linear
-    _lin2: hk.Linear
-    _val: hk.Linear
-    _adv: hk.Linear
+    _q: hk.Linear
 
     def __init__(self):
         super().__init__()
         self._relu = jax.nn.relu
         self._conv1 = hk.Conv3D(128, (1, 2, 2))
         self._conv2 = hk.Conv3D(64, (2, 3, 3))
-        self._batch_norm1 = hk.BatchNorm(create_scale=True, create_offset=True, decay_rate=0.999)
-        self._batch_norm2 = hk.BatchNorm(create_scale=True, create_offset=True, decay_rate=0.999)
+        self._flatten = hk.Flatten()
+        self._lin1 = hk.Linear(64)
+        self._q = hk.Linear(env.action_space.n)
 
-    def __call__(self, x: ndarray or jnp.ndarray) -> ndarray or jnp.ndarray:
+    def __call__(self, x: ndarray or jnp.ndarray, training: bool = False) -> ndarray or jnp.ndarray:
+        x = self._conv1(x)
+        x = self._relu(x)
+        x = self._conv2(x)
+        x = self._relu(x)
+        x = self._flatten(x)
         x = self._lin1(x)
-        x = jax.nn.relu(x)
-        x = self._lin2(x)
-        x = jax.nn.relu(x)
-        val: ndarray or jnp.ndarray = self._val(x)
-        adv: ndarray or jnp.ndarray = self._adv(x)
-        Q: ndarray or jnp.ndarray = val + adv - jnp.mean(adv, axis=1, keepdims=True)
-        return Q
+        x = self._relu(x)
+        x = self._q(x)
+        x = self._relu(x)
+        return x
 
 
 class ReplayBuffer:
@@ -81,7 +87,7 @@ class ReplayBuffer:
     _samples: int
 
     def __init__(self,
-                 obs_shape: Tuple[int, int],
+                 obs_shape: Tuple,
                  buffer_size: int = 1000000):
         self._buffer_size = buffer_size
         self._states = zeros(obs_shape, dtype=float64)
@@ -122,7 +128,7 @@ def train_step(params: hk.Params, opt_state: Mapping,
 
 
 def compute_loss(params: hk.Params, inp: jnp.ndarray, targ: jnp.ndarray) -> jnp.ndarray:
-    pred: jnp.ndarray = model.apply(params, inp)
+    pred: jnp.ndarray = model.apply(params, inp, True)
     loss_val: jnp.ndarray = jnp.mean(jnp.sum(optax.huber_loss(pred, targ), axis=1), axis=0)
     return loss_val
 
@@ -131,9 +137,9 @@ def compute_loss(params: hk.Params, inp: jnp.ndarray, targ: jnp.ndarray) -> jnp.
 def compute_q_targets(params: hk.Params, target_params: hk.Params,
                       states: jnp.ndarray, actions: ndarray, rewards: ndarray,
                       observations: ndarray, dones: ndarray) -> jnp.ndarray:
-    q: ndarray = model.apply(params, states)
-    next_q: ndarray = model.apply(params, observations)
-    next_q_tm: ndarray = model.apply(target_params, observations)
+    q: ndarray = model.apply(params, states, True)
+    next_q: ndarray = model.apply(params, observations, True)
+    next_q_tm: ndarray = model.apply(target_params, observations, True)
     max_actions: ndarray = argmax(next_q, axis=1)
     targets: List = []
     for index, action in enumerate(max_actions):
@@ -155,7 +161,7 @@ class Agent:
 
     def __init__(self, params: hk.Params, opt_state: Mapping):
         buffer_size: int = 100000
-        self._replay_buffer = ReplayBuffer(buffer_size=buffer_size, obs_shape=(buffer_size, 9))
+        self._replay_buffer = ReplayBuffer(buffer_size=buffer_size, obs_shape=(buffer_size, 4, 96, 96, 3))
         self._params = params
         self._opt_state = opt_state
         self._target_params = params
@@ -184,13 +190,13 @@ class Agent:
         self._target_params = self._params
 
     def save(self):
-        if not os.path.exists("lunar_lander"):
-            os.mkdir("lunar_lander")
-        with open("lunar_lander/params.pickle", "wb") as file:
+        if not os.path.exists("car_racing"):
+            os.mkdir("car_racing")
+        with open("car_racing/params.pickle", "wb") as file:
             dump(self._params, file)
 
     def load(self):
-        with open("lunar_lander/params.pickle", "rb") as file:
+        with open("car_racing/params.pickle", "rb") as file:
             self._params = load(file)
 
     def training(self):
@@ -199,15 +205,10 @@ class Agent:
             start: float = time.time()
             episode_reward: float = 0.
             state: ndarray = env.reset()
-            state = append(state, 0.)
-            state: ndarray = state[newaxis, ...]
             for step in range(1, MAX_STEPS + 1):
                 step_count += 1
-                fraction_finished: float = (step + 1) / MAX_STEPS
                 action: int = self._policy(state)
                 observation, reward, done, info = env.step(action)
-                observation = append(observation, fraction_finished)
-                observation: ndarray = observation[newaxis, ...]
                 # env.render()
 
                 if step == MAX_STEPS:
@@ -265,7 +266,7 @@ if __name__ == '__main__':
     env: gym.Env = create_environment()
 
     rng: jax.random.PRNGKeyArray = jax.random.PRNGKey(time.time_ns())
-    test_input: np.ndarray = zeros((1, 9))
+    test_input: np.ndarray = env.reset()
 
     model: hk.Transformed = hk.without_apply_rng(hk.transform(lambda *args: Model()(*args)))
     optimizer: optax.adam = optax.adam(LEARNING_RATE)
