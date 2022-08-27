@@ -215,6 +215,10 @@ class Agent:
             print("Episode: {} -- Reward: {} -- Average: {}".
                   format(episode, episode_reward, self._average_reward()))
 
+            if self._average_reward() > 240:
+                self.save()
+                return
+
             end: float = time.time()
             print('Time: {}s'.format(end - start))
 
