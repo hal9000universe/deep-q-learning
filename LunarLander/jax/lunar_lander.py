@@ -4,20 +4,16 @@ import numpy as np
 import haiku as hk
 import optax
 import gym
+import os
 
 import time
-from typing import Callable, Mapping, Tuple, List, NamedTuple
+from typing import Callable, Mapping, Tuple, List
 from numpy import ndarray, zeros, float64, int64, argmax, append, newaxis
 from jax.nn import one_hot
 from numpy.random import uniform, randint
 
 from statistics import mean
-
-
-class TrainingState(NamedTuple):
-    params: hk.Params
-    avg_params: hk.Params
-    opt_state: optax.OptState
+from pickle import dump, load
 
 
 class Model(hk.Module):
@@ -31,7 +27,7 @@ class Model(hk.Module):
         self._lin1 = hk.Linear(64)
         self._lin2 = hk.Linear(64)
         self._val = hk.Linear(1)
-        self._adv = hk.Linear(4)
+        self._adv = hk.Linear(env.action_space.n)
 
     def __call__(self, x: np.ndarray or jnp.ndarray) -> np.ndarray or jnp.ndarray:
         x = self._lin1(x)
@@ -86,23 +82,38 @@ class ReplayBuffer:
         return batch
 
 
-def train_step(train_state: TrainingState, network: hk.Transformed, optimiser: optax.adam,
-               loss_fn: Callable, states: jnp.ndarray, q_targets: jnp.ndarray):
-    grads = jax.grad(loss_fn)(train_state.params, network, states, q_targets)
-    updates, opt_state = optimiser.update(grads, train_state.opt_state)
-    params = optax.apply_updates(train_state.params, updates)
-    # Compute avg_params, the exponential moving average of the "live" params.
-    # We use this only for evaluation (cf. https://doi.org/10.1137/0330046).
-    avg_params = optax.incremental_update(
-        params, train_state.avg_params, step_size=0.001)
-    return TrainingState(params, avg_params, opt_state)
+@jax.jit
+def train_step(params: hk.Params, opt_state: Mapping,
+               states: jnp.ndarray, q_targets: jnp.ndarray) -> Tuple[hk.Params, Mapping]:
+    grads = jax.grad(compute_loss)(params, states, q_targets)
+    updates, opt_state = optimizer.update(grads, opt_state)
+    params = optax.apply_updates(params, updates)
+    return params, opt_state
 
 
-def compute_loss(params: hk.Params, network: hk.Transformed,
-                 inp: jnp.ndarray, targ: jnp.ndarray) -> jnp.ndarray:
-    pred: jnp.ndarray = network.apply(params, inp)
-    loss_val: jnp.ndarray = jnp.mean(jnp.sum(optax.l2_loss(pred, targ), axis=1), axis=0)
+def compute_loss(params: hk.Params, inp: jnp.ndarray, targ: jnp.ndarray) -> jnp.ndarray:
+    pred: jnp.ndarray = model.apply(params, inp)
+    loss_val: jnp.ndarray = jnp.mean(jnp.sum(optax.huber_loss(pred, targ), axis=1), axis=0)
     return loss_val
+
+
+def compute_q_targets(params: hk.Params, target_params: hk.Params,
+                      states: ndarray, actions: ndarray, rewards: ndarray,
+                      observations: ndarray, dones: ndarray) -> jnp.ndarray:
+    q: ndarray = model.apply(params, states)
+    next_q: ndarray = model.apply(params, observations)
+    next_q_tm: ndarray = model.apply(target_params, observations)
+    max_actions: ndarray = argmax(next_q, axis=1)
+    targets: List = []
+    for index, action in enumerate(max_actions):
+        if dones[index]:
+            target_val: float = rewards[index]
+        else:
+            target_val: float = rewards[index] + GAMMA * next_q_tm[index, action] - q[index, actions[index]]
+        q_target: ndarray = q[index] + target_val * one_hot(actions[index], env.action_space.n)
+        targets.append(q_target)
+    targets: jnp.ndarray = jnp.array(targets)
+    return targets
 
 
 class Agent:
@@ -117,7 +128,8 @@ class Agent:
         buffer_size: int = 100000
         self._replay_buffer = ReplayBuffer(buffer_size=buffer_size, obs_shape=(buffer_size, 9))
         self._q_model = q_net
-        self._train_state = TrainingState(params, params, opt_state)
+        self._params = params
+        self._opt_state = opt_state
         self._optimizer = opt
         self._loss = loss_fn
         self._target_params = params
@@ -138,30 +150,27 @@ class Agent:
 
     def _policy(self, x: ndarray) -> int or ndarray:
         if self._epsilon < uniform(0, 1):
-            action: ndarray = argmax(self._q_model.apply(self._train_state.params, x))
+            action: ndarray = argmax(model.apply(self._params, x))
             return int(action)
         else:
             return randint(0, 4)
 
     def _update_target_model(self):
-        self._target_params = self._train_state.params
+        self._target_params = self._params
 
-    def _compute_q_targets(self, states: ndarray, actions: ndarray, rewards: ndarray,
-                           observations: ndarray, dones: ndarray) -> jnp.ndarray:
-        q: ndarray = self._q_model.apply(self._train_state.params, states)
-        next_q: ndarray = self._q_model.apply(self._train_state.params, observations)
-        next_q_tm: ndarray = self._q_model.apply(self._target_params, observations)
-        max_actions: ndarray = argmax(next_q, axis=1)
-        targets: List = []
-        for index, action in enumerate(max_actions):
-            if dones[index]:
-                target_val: float = rewards[index]
-            else:
-                target_val: float = rewards[index] + GAMMA * next_q_tm[index, action] - q[index, actions[index]]
-            q_target: ndarray = q[index] + target_val * one_hot(actions[index], env.action_space.n)
-            targets.append(q_target)
-        targets: ndarray = jnp.array(targets)
-        return targets
+    def _save(self):
+        if not os.path.exists("lunar_lander"):
+            os.mkdir("lunar_lander")
+        with open("lunar_lander/params.pickle", "wb") as f:
+            dump(self._params, f)
+        with open("lunar_lander/opt_state.pickle", "wb") as f:
+            dump(self._opt_state, f)
+
+    def _load(self):
+        with open("lunar_lander/params.pickle", "rb") as f:
+            self._params = load(f)
+        with open("lunar_lander/opt_state.pickle", "rb") as f:
+            self._opt_state = load(f)
 
     def training(self):
         step_count: int = 0
@@ -188,26 +197,21 @@ class Agent:
                 episode_reward += reward
 
                 if self._replay_buffer.size >= TRAINING_START and step_count % TRAIN_FREQUENCY == 0:
-                    sample_start: float = time.time()
                     states, actions, rewards, observations, dones = self._replay_buffer.sample_batch(BATCH_SIZE)
-                    sample_end: float = time.time()
-                    # print("Sampling time: {}s".format(sample_end - sample_start))
                     states: jnp.ndarray = jax.numpy.asarray(states)
-                    q_start: float = time.time()
-                    q_targets: jnp.ndarray = self._compute_q_targets(states, actions, rewards, observations, dones)
-                    q_end: float = time.time()
-                    # print("Q-value computation time: {}s".format(q_end - q_start))
-                    train_start: float = time.time()
-                    self._train_state = train_step(self._train_state, self._q_model, self._optimizer, self._loss,
-                                                   states, q_targets)
-                    train_end: float = time.time()
-                    # print("Training time: {}s".format(train_end - train_start))
+                    q_targets: jnp.ndarray = compute_q_targets(self._params, self._target_params, states,
+                                                               actions, rewards, observations, dones)
+                    self._params, self._opt_state = train_step(self._params, self._opt_state,
+                                                               states, q_targets)
 
                 if done:
                     break
 
             if episode % REPLACE_FREQUENCY == 0:
                 self._update_target_model()
+
+            if episode % BACKUP_FREQUENCY == 0:
+                self._save()
 
             self._update_epsilon()
             self._update_episode_rewards(episode_reward)

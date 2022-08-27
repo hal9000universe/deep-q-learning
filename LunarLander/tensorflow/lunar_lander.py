@@ -170,9 +170,9 @@ class Agent:
 
     def training(self):
         self._build()
-        start: float = time.time()
         step_count: int = 0
         for episode in range(MAX_EPISODES):
+            start: float = time.time()
             episode_reward: float = 0.
             state: ndarray = env.reset()
             state = append(state, 0.)
@@ -222,8 +222,8 @@ class Agent:
             print("Episode: {} -- Reward: {} -- Average: {}".
                   format(episode, episode_reward, self._average_reward()))
 
-        end: float = time.time()
-        print('Time: {}s'.format(end - start))
+            end: float = time.time()
+            print('Time: {}s'.format(end - start))
 
     @property
     def model(self) -> DDDQN:
