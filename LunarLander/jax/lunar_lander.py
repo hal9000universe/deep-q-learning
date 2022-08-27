@@ -97,6 +97,7 @@ def compute_loss(params: hk.Params, inp: jnp.ndarray, targ: jnp.ndarray) -> jnp.
     return loss_val
 
 
+@jax.jit
 def compute_q_targets(params: hk.Params, target_params: hk.Params,
                       states: ndarray, actions: ndarray, rewards: ndarray,
                       observations: ndarray, dones: ndarray) -> jnp.ndarray:
@@ -106,10 +107,8 @@ def compute_q_targets(params: hk.Params, target_params: hk.Params,
     max_actions: ndarray = argmax(next_q, axis=1)
     targets: List = []
     for index, action in enumerate(max_actions):
-        if dones[index]:
-            target_val: float = rewards[index]
-        else:
-            target_val: float = rewards[index] + GAMMA * next_q_tm[index, action] - q[index, actions[index]]
+        target_val: float = rewards[index] + (GAMMA * next_q_tm[index, action] - q[index, actions[index]]) * dones[index]
+
         q_target: ndarray = q[index] + target_val * one_hot(actions[index], env.action_space.n)
         targets.append(q_target)
     targets: jnp.ndarray = jnp.array(targets)
@@ -199,6 +198,8 @@ class Agent:
                 if self._replay_buffer.size >= TRAINING_START and step_count % TRAIN_FREQUENCY == 0:
                     states, actions, rewards, observations, dones = self._replay_buffer.sample_batch(BATCH_SIZE)
                     states: jnp.ndarray = jax.numpy.asarray(states)
+
+                    dones = dones.astype(float64)
                     q_targets: jnp.ndarray = compute_q_targets(self._params, self._target_params, states,
                                                                actions, rewards, observations, dones)
                     self._params, self._opt_state = train_step(self._params, self._opt_state,
@@ -227,7 +228,7 @@ if __name__ == '__main__':
     MAX_STEPS: int = 1000
     MAX_EPISODES: int = 10000
     REPLACE_FREQUENCY: int = 50
-    BACKUP_FREQUENCY: int = 100
+    BACKUP_FREQUENCY: int = 5
     TRAINING_START: int = 256
     TRAIN_FREQUENCY: int = 4
     EPSILON: float = 1.0
