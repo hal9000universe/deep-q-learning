@@ -7,7 +7,7 @@ import gym
 import os
 
 import time
-from typing import Callable, Mapping, Tuple, List
+from typing import Mapping, Tuple, List
 from numpy import ndarray, zeros, float64, int64, argmax, append, newaxis
 from jax.nn import one_hot
 from numpy.random import uniform, randint
@@ -118,22 +118,17 @@ def compute_q_targets(params: hk.Params, target_params: hk.Params,
 
 class Agent:
     _replay_buffer: ReplayBuffer
-    _q_model: hk.Transformed
-    _model_version: int
+    _params: hk.Params
+    _opt_state: Mapping
     _epsilon: float
     _episode_rewards: List[float]
 
-    def __init__(self, q_net, params: hk.Params, opt: optax.adam,
-                 opt_state: Mapping, loss_fn: Callable):
+    def __init__(self, params: hk.Params, opt_state: Mapping):
         buffer_size: int = 100000
         self._replay_buffer = ReplayBuffer(buffer_size=buffer_size, obs_shape=(buffer_size, 9))
-        self._q_model = q_net
         self._params = params
         self._opt_state = opt_state
-        self._optimizer = opt
-        self._loss = loss_fn
         self._target_params = params
-        self._model_version = 0
         self._epsilon = EPSILON
         self._episode_rewards = []
 
@@ -158,19 +153,15 @@ class Agent:
     def _update_target_model(self):
         self._target_params = self._params
 
-    def _save(self):
+    def save(self):
         if not os.path.exists("lunar_lander"):
             os.mkdir("lunar_lander")
-        with open("lunar_lander/params.pickle", "wb") as f:
-            dump(self._params, f)
-        with open("lunar_lander/opt_state.pickle", "wb") as f:
-            dump(self._opt_state, f)
+        with open("lunar_lander/params.pickle", "wb") as file:
+            dump(self._params, file)
 
-    def _load(self):
-        with open("lunar_lander/params.pickle", "rb") as f:
-            self._params = load(f)
-        with open("lunar_lander/opt_state.pickle", "rb") as f:
-            self._opt_state = load(f)
+    def load(self):
+        with open("lunar_lander/params.pickle", "rb") as file:
+            self._params = load(file)
 
     def training(self):
         step_count: int = 0
@@ -213,7 +204,7 @@ class Agent:
                 self._update_target_model()
 
             if episode % BACKUP_FREQUENCY == 0:
-                self._save()
+                self.save()
 
             self._update_epsilon()
             self._update_episode_rewards(episode_reward)
@@ -229,7 +220,7 @@ if __name__ == '__main__':
     MAX_STEPS: int = 1000
     MAX_EPISODES: int = 10000
     REPLACE_FREQUENCY: int = 50
-    BACKUP_FREQUENCY: int = 5
+    BACKUP_FREQUENCY: int = 50
     TRAINING_START: int = 256
     TRAIN_FREQUENCY: int = 4
     EPSILON: float = 1.0
@@ -249,5 +240,5 @@ if __name__ == '__main__':
     parameters: hk.Params = model.init(rng, test_input)
     optimizer_state: Mapping = optimizer.init(parameters)
 
-    agent = Agent(model, parameters, optimizer, optimizer_state, compute_loss)
+    agent = Agent(parameters, optimizer_state)
     agent.training()
