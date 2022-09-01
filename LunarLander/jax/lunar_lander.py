@@ -4,6 +4,7 @@ import time
 from statistics import mean
 from pickle import dump, load
 from typing import Mapping, Tuple, List
+import asyncio
 
 # nn & rl
 import jax
@@ -168,6 +169,7 @@ def compute_action(params: hk.Params, state: ndarray) -> ndarray:
     return action
 
 
+@jax.jit
 def preprocessing(states: ndarray, actions: ndarray, rewards: ndarray, observations: ndarray,
                   dones: ndarray) -> Tuple[jnp.ndarray, ndarray, ndarray, ndarray, ndarray]:
     states: jnp.ndarray = jax.numpy.asarray(states)
@@ -190,10 +192,10 @@ class Agent:
         self._epsilon = EPSILON
         self._episode_rewards = []
 
-    def _update_epsilon(self):
+    async def _update_epsilon(self):
         self._epsilon = max(self._epsilon * EPSILON_DECAY_RATE, MIN_EPSILON)
 
-    def _update_episode_rewards(self, episode_reward: float):
+    async def _update_episode_rewards(self, episode_reward: float):
         self._episode_rewards.append(episode_reward)
         while len(self._episode_rewards) > 50:
             self._episode_rewards.pop(0)
@@ -207,7 +209,7 @@ class Agent:
         else:
             return randint(0, 4)
 
-    def _update_target_model(self):
+    async def _update_target_model(self):
         self._target_params = self._params
 
     def training(self):
@@ -220,7 +222,7 @@ class Agent:
             state: ndarray = state[newaxis, ...]
             for step in range(1, MAX_STEPS + 1):
                 step_count += 1
-                fraction_finished: float = (step + 1) / MAX_STEPS
+                fraction_finished: float = step / MAX_STEPS
                 action: int = self._policy(state)
                 observation, reward, done, info = env.step(action)
                 observation = append(observation, fraction_finished)
@@ -262,13 +264,13 @@ class Agent:
                     break
 
             if episode % REPLACE_FREQUENCY == 0:
-                self._update_target_model()
+                asyncio.run(self._update_target_model())
 
             if episode % BACKUP_FREQUENCY == 0:
-                save_training_state(self._params, self._opt_state)
+                asyncio.run(save_training_state(self._params, self._opt_state))
 
-            self._update_epsilon()
-            self._update_episode_rewards(episode_reward)
+            asyncio.run(self._update_epsilon())
+            asyncio.run(self._update_episode_rewards(episode_reward))
 
             if self._average_reward() > 240:
                 save_training_state(self._params, self._opt_state)
@@ -282,7 +284,7 @@ class Agent:
 
 
 # TODO: implement optimizer save and load
-def save_training_state(params: hk.Params, opt_state: Mapping):
+async def save_training_state(params: hk.Params, opt_state: Mapping):
     if not os.path.exists("lunar_lander"):
         os.mkdir("lunar_lander")
     with open("lunar_lander/params.pickle", "wb") as file:
