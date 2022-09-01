@@ -1,14 +1,14 @@
 # py
 import os
 import time
+import numba
 from statistics import mean
 from pickle import dump, load
-from typing import Mapping, Tuple, List
+from typing import Mapping, Tuple, List, Any, Callable
 
 # nn & rl
 import jax
 import jax.numpy as jnp
-import numba
 import numpy as np
 import haiku as hk
 import optax
@@ -18,25 +18,26 @@ from numpy import ndarray, zeros, float64, int64, argmax, append, newaxis
 from numpy.random import uniform, randint
 
 
-# TODO: implement Observation Wrapper
 class ObsWrapper(gym.Wrapper):
 
     def __init__(self, environment):
         super(ObsWrapper, self).__init__(environment)
         self._step = 0
+        self._observation_space = gym.spaces.Box(shape=(1, 9), low=float('-inf'), high=float('inf'))
 
-    def _obs(self, observation: ndarray) -> ndarray:
+    def observation(self, observation: ndarray) -> ndarray:
         fraction_finished: float = self._step / MAX_STEPS
         return append(observation, fraction_finished)[newaxis, ...]
 
-    def step(self, action):
+    def step(self, action) -> Tuple[ndarray, float, bool, Any]:
         self._step += 1
         observation, reward, done, info = self.env.step(action)
-        return self._obs(observation), reward, done, info
+        return self.observation(observation), reward, done, info
 
-    def reset(self, **kwargs):
+    def reset(self, **kwargs) -> ndarray:
         self._step = 0
-        self.env.reset()
+        state: ndarray = self.env.reset()
+        return self.observation(state)
 
 
 class Model(hk.Module):
@@ -63,8 +64,6 @@ class Model(hk.Module):
         return Q
 
 
-# TODO: implement replay buffer structure from
-#  Fast Reinforcement Learning using online adjustments from the past
 class ReplayBuffer:
     _buffer_size: int
     _states: ndarray
@@ -76,7 +75,7 @@ class ReplayBuffer:
     _samples: int
 
     def __init__(self,
-                 obs_shape: Tuple[int, int],
+                 obs_shape: Tuple,
                  buffer_size: int = 1000000):
         self._buffer_size = buffer_size
         self._states = zeros(obs_shape, dtype=float64)
@@ -139,9 +138,9 @@ def train_step(params: hk.Params, opt_state: Mapping,
     return params, opt_state
 
 
-def compute_loss(params: hk.Params, inp: jnp.ndarray, targ: jnp.ndarray) -> jnp.ndarray:
-    pred: jnp.ndarray = model.apply(params, inp)
-    loss_val: jnp.ndarray = jnp.mean(jnp.sum(optax.huber_loss(pred, targ), axis=1), axis=0)
+def compute_loss(params: hk.Params, states: jnp.ndarray, q_targets: jnp.ndarray) -> jnp.ndarray:
+    pred: jnp.ndarray = model.apply(params, states)
+    loss_val: jnp.ndarray = jnp.mean(jnp.sum(optax.huber_loss(pred, q_targets), axis=1), axis=0)
     return loss_val
 
 
@@ -162,10 +161,12 @@ def compute_q_targets(params: hk.Params, target_params: hk.Params,
     return targets
 
 
-@jax.jit
-def compute_action(params: hk.Params, state: ndarray) -> ndarray:
-    action: ndarray = argmax(model.apply(params, state))
-    return action
+def generate_action_computation(network: hk.Transformed) -> Callable:
+    @jax.jit
+    def action_computation(params: hk.Params, state: ndarray) -> ndarray:
+        action: ndarray = argmax(network.apply(params, state))
+        return action
+    return action_computation
 
 
 def preprocessing(states: ndarray, actions: ndarray, rewards: ndarray, observations: ndarray,
@@ -214,24 +215,19 @@ class Agent:
         step_count: int = 0
         for episode in range(MAX_EPISODES):
             start: float = time.time()
-            episode_reward: float = 0.
+            epi_reward: float = 0.
             state: ndarray = env.reset()
-            state = append(state, 0.)
-            state: ndarray = state[newaxis, ...]
             for step in range(1, MAX_STEPS + 1):
                 step_count += 1
-                fraction_finished: float = (step + 1) / MAX_STEPS
                 action: int = self._policy(state)
                 observation, reward, done, info = env.step(action)
-                observation = append(observation, fraction_finished)
-                observation: ndarray = observation[newaxis, ...]
 
                 if step == MAX_STEPS:
                     done: bool = True
 
                 self._replay_buffer.add(state[0], action, reward, observation[0], done)
                 state = observation
-                episode_reward += reward
+                epi_reward += reward
 
                 if self._replay_buffer.size >= TRAINING_START and step_count % TRAIN_FREQUENCY == 0:
                     states, actions, rewards, observations, dones = sample_batch(self._replay_buffer.size,
@@ -265,45 +261,37 @@ class Agent:
                 self._update_target_model()
 
             if episode % BACKUP_FREQUENCY == 0:
-                save_training_state(self._params, self._opt_state)
+                save_training_state(self._params)
 
             self._update_epsilon()
-            self._update_episode_rewards(episode_reward)
+            self._update_episode_rewards(epi_reward)
 
             if self._average_reward() > 240:
-                save_training_state(self._params, self._opt_state)
+                save_training_state(self._params)
                 return
 
             end: float = time.time()
             if episode % 10 == 0:
-                print("Episode: {} -- Reward: {} -- Average: {}".
-                      format(episode, episode_reward, self._average_reward()))
+                print("Episode: {} -- Reward: {} -- Average: {}".format(episode, epi_reward, self._average_reward()))
                 print('Time: {}s'.format(end - start))
 
 
-# TODO: implement optimizer save and load
-def save_training_state(params: hk.Params, opt_state: Mapping):
+def save_training_state(params: hk.Params):
     if not os.path.exists("lunar_lander"):
         os.mkdir("lunar_lander")
     with open("lunar_lander/params.pickle", "wb") as file:
         dump(params, file)
-    with open("lunar_lander/opt_state.pickle", "wb") as file:
-        dump(opt_state, file)
 
 
-def load_parameters() -> Tuple[hk.Params, Mapping]:
+def load_state() -> hk.Params:
     with open("lunar_lander/params.pickle", "rb") as file:
         params: hk.Params = load(file)
-    with open("lunar_lander/opt_state.pickle", "rb") as file:
-        opt_state: Mapping = load(file)
-    return params, opt_state
+    return params
 
 
 def visualize_agent():
     state: ndarray = env.reset()
     for step in range(MAX_STEPS):
-        fraction_finished: float = step / MAX_STEPS
-        state = append(state, fraction_finished)[newaxis, ...]
         action: int = int(argmax(model.apply(parameters, state)))
         state, reward, done, info = env.step(action)
         env.render()
@@ -324,7 +312,7 @@ if __name__ == '__main__':
     GAMMA: float = 0.999
     LEARNING_RATE: float = 0.001
 
-    env: gym.Env = gym.make('LunarLander-v2')
+    env: gym.Env = ObsWrapper(gym.make('LunarLander-v2'))
 
     rng: jax.random.PRNGKeyArray = jax.random.PRNGKey(time.time_ns())
     test_input: np.ndarray = zeros((1, 9))
@@ -333,7 +321,9 @@ if __name__ == '__main__':
     optimizer: optax.adam = optax.adam(LEARNING_RATE)
 
     parameters: hk.Params = model.init(rng, test_input)
-    optimizer_state: Mapping = optimizer.init(parameters)
+    optimizer_state = optimizer.init(parameters)
+
+    compute_action: Callable = generate_action_computation(model)
 
     agent = Agent(parameters, optimizer_state)
     agent.training()

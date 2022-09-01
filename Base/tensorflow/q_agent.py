@@ -10,7 +10,7 @@ from tensorflow.keras.losses import Loss
 import gym
 from numpy import ndarray, argmax, float64
 
-from Base.ReplayBuffer import ReplayBuffer
+from Base.tensorflow.replay_buffer import ReplayBuffer
 
 
 class DQN(Module):
@@ -114,13 +114,13 @@ class Agent:
         next_q_tm: Tensor = self._target_model(observations)
         max_actions: ndarray = argmax(next_q, axis=1)
         targets: List = []
-        for index, action in enumerate(max_actions):
+        for index, (max_ac, ac, qi) in enumerate(zip(max_actions, actions, q)):
             if dones[index]:
                 target_val: float = rewards[index]
             else:
-                target_val: float = rewards[index] + self._gamma * next_q_tm[index, action] - q[index, actions[index]]
-            q_target: Tensor = cast(q[index], dtype=float64) + one_hot(
-                actions[index], self._env.action_space.n, on_value=cast(target_val, dtype=float64))
+                target_val: float = rewards[index] + self._gamma * next_q_tm[index, max_ac] - q[index, actions[index]]
+            q_target: Tensor = cast(qi, dtype=float64) + one_hot(ac, self._env.action_space.n,
+                                                                 on_value=cast(target_val, dtype=float64))
             targets.append(q_target)
         targets: Tensor = convert_to_tensor(targets, dtype=float64)
         return targets
