@@ -72,6 +72,7 @@ def action_computation(network: hk.Transformed) -> Callable:
     return compute_action
 
 
+@jax.jit
 def preprocessing(states: ndarray,
                   actions: ndarray,
                   rewards: ndarray,
