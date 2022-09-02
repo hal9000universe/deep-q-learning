@@ -1,9 +1,14 @@
+# py
+from typing import Tuple
+
+# nn & rl
+import numpy as np
 from numpy import power, take_along_axis, zeros, float64
 from numpy.random import uniform
-from typing import Tuple
+
+# lib
 from replay_buffer import ReplayBuffer
 from sum_tree import *
-import numpy as np
 
 
 class PrioritizedExperienceReplay(ReplayBuffer):

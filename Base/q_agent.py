@@ -9,7 +9,7 @@ from pickle import load, dump
 # nn & rl
 from numpy.random import randint
 
-# custom
+# lib
 from Base.replay_buffer import ReplayBuffer, sample_batch
 from Base.q_learning_functions import *
 

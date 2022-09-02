@@ -1,7 +1,10 @@
-import numpy
-from numpy import ndarray, vectorize
+# py
 import math
 import numba
+
+# nn & rl
+import numpy
+from numpy import ndarray, vectorize
 
 
 @numba.njit
