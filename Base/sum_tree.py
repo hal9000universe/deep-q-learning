@@ -1,8 +1,10 @@
 import numpy
 from numpy import ndarray, vectorize
 import math
+import numba
 
 
+@numba.njit
 def propagate_changes(tree: ndarray, node: int, change: float):
     size = int(tree.size / 2)
     node += size
@@ -11,13 +13,16 @@ def propagate_changes(tree: ndarray, node: int, change: float):
         node = math.floor(node / 2)
 
 
+@numba.njit
 def add(tree: ndarray, node: int, new_value: float):
+    node += 1
     size = int(tree.size / 2)
     change = new_value - tree[node + size]
     propagate_changes(tree, node, change)
 
 
 def retrieve(tree: ndarray, values: ndarray) -> ndarray:
+    @numba.njit
     def ret(value: float):
         i = 1
         size = int(tree.size / 2)
@@ -27,7 +32,7 @@ def retrieve(tree: ndarray, values: ndarray) -> ndarray:
             else:
                 value -= tree[2*i]
                 i = 2*i+1
-        return i - size
+        return i - size - 1
 
     return vectorize(ret)(values)
 
