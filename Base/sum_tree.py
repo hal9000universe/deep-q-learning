@@ -14,7 +14,7 @@ def propagate_changes(tree: ndarray, node: int, change: float):
 
 
 @numba.njit
-def add(tree: ndarray, node: int, new_value: float):
+def update(tree: ndarray, node: int, new_value: float):
     node += 1
     size = int(tree.size / 2)
     change = new_value - tree[node + size]

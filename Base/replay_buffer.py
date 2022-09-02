@@ -15,24 +15,25 @@ class ReplayBuffer:
     _observations: ndarray
     _dones: ndarray
     _counter: int
-    _samples: int
+    _num_samples: int
 
     def __init__(self,
-                 obs_shape: Tuple,
-                 buffer_size: int
+                 buffer_size: int,
+                 obs_placeholder_shape: Tuple,
+                 ac_placeholder_shape: Tuple
                  ):
         self._buffer_size = buffer_size
-        self._states = zeros(obs_shape, dtype=float64)
-        self._actions = zeros((buffer_size,), dtype=int64)
+        self._states = zeros(obs_placeholder_shape, dtype=float64)
+        self._actions = zeros(ac_placeholder_shape, dtype=int64)
         self._rewards = zeros((buffer_size,), dtype=float64)
-        self._observations = zeros(obs_shape, dtype=float64)
+        self._observations = zeros(obs_placeholder_shape, dtype=float64)
         self._dones = zeros((buffer_size,), dtype=bool)
         self._counter = 0
-        self._samples = 0
+        self._num_samples = 0
 
     @property
     def size(self) -> int:
-        return self._samples
+        return self._num_samples
 
     @property
     def states(self) -> ndarray:
@@ -61,13 +62,14 @@ class ReplayBuffer:
         self._observations[self._counter % self._buffer_size] = observation
         self._dones[self._counter % self._buffer_size] = done
         self._counter += 1
-        self._samples = min(self._counter, self._buffer_size)
+        self._num_samples = min(self._counter, self._buffer_size)
 
 
 @numba.njit
 def sample_batch(num_samples: int,
                  states: ndarray,
-                 actions: ndarray, rewards: ndarray,
+                 actions: ndarray,
+                 rewards: ndarray,
                  observations: ndarray,
                  dones: ndarray,
                  batch_size: int

@@ -21,7 +21,7 @@ def generate_train_step(optimizer: optax.adam, model: hk.Transformed) -> Callabl
                    q_targets: jnp.ndarray
                    ) -> Tuple[hk.Params, Mapping]:
         grads = jax.grad(compute_loss)(params, states, q_targets)
-        updates, opt_state = optimizer.update(grads, opt_state)
+        updates, opt_state = optimizer._update(grads, opt_state)
         params = optax.apply_updates(params, updates)
         return params, opt_state
 

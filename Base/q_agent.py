@@ -10,8 +10,8 @@ from pickle import load, dump
 from numpy.random import randint
 
 # custom
-from replay_buffer import ReplayBuffer, sample_batch
-from q_learning_functions import *
+from Base.replay_buffer import ReplayBuffer, sample_batch
+from Base.q_learning_functions import *
 
 
 class Agent:
@@ -43,7 +43,8 @@ class Agent:
                  opt_state: Mapping,
                  env: gym.Env,
                  buffer_size: int,
-                 obs_shape: Tuple,
+                 obs_placeholder_shape: Tuple,
+                 ac_placeholder_shape: Tuple,
                  gamma: float,
                  epsilon: float,
                  epsilon_decay_rate: float,
@@ -62,7 +63,9 @@ class Agent:
         self._opt_state = opt_state
         self._target_params = params
         self._env = env
-        self._replay_buffer = ReplayBuffer(buffer_size=buffer_size, obs_shape=obs_shape)
+        self._replay_buffer = ReplayBuffer(buffer_size=buffer_size,
+                                           obs_placeholder_shape=obs_placeholder_shape,
+                                           ac_placeholder_shape=ac_placeholder_shape)
         self._gamma = gamma
         self._epsilon = epsilon
         self._epsilon_decay_rate = epsilon_decay_rate
