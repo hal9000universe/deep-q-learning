@@ -1,6 +1,7 @@
 # py
 import os
 import time
+import asyncio
 from statistics import mean
 from random import uniform
 from pickle import load, dump
@@ -75,10 +76,10 @@ class Agent:
         self._replace_frequency = replace_frequency
         self._episode_rewards = []
 
-    def _update_epsilon(self):
+    async def _update_epsilon(self):
         self._epsilon = max(self._epsilon * self._epsilon_decay_rate, self._min_epsilon)
 
-    def _update_episode_rewards(self, episode_reward: float):
+    async def _update_episode_rewards(self, episode_reward: float):
         self._episode_rewards.append(episode_reward)
         while len(self._episode_rewards) > 50:
             self._episode_rewards.pop(0)
@@ -92,7 +93,7 @@ class Agent:
         else:
             return randint(0, 4)
 
-    def _update_target_model(self):
+    async def _update_target_model(self):
         self._target_params = self._params
 
     def training(self):
@@ -144,16 +145,16 @@ class Agent:
                     break
 
             if episode % self._replace_frequency == 0:
-                self._update_target_model()
+                asyncio.run(self._update_target_model())
 
             if episode % self._back_up_frequency == 0:
-                save_training_state(self._params)
+                asyncio.run(save_training_state(self._params))
 
-            self._update_epsilon()
-            self._update_episode_rewards(epi_reward)
+            asyncio.run(self._update_epsilon())
+            asyncio.run(self._update_episode_rewards(epi_reward))
 
             if self._average_reward() > 240:
-                save_training_state(self._params)
+                asyncio.run(save_training_state(self._params))
                 return
 
             end: float = time.time()
@@ -162,7 +163,7 @@ class Agent:
                 print('Time: {}s'.format(end - start))
 
 
-def save_training_state(params: hk.Params):
+async def save_training_state(params: hk.Params):
     if not os.path.exists("lunar_lander"):
         os.mkdir("lunar_lander")
     with open("lunar_lander/params.pickle", "wb") as file:

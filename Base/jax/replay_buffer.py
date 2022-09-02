@@ -18,8 +18,9 @@ class ReplayBuffer:
     _samples: int
 
     def __init__(self,
-                 obs_shape: Tuple[int, int],
-                 buffer_size: int = 1000000):
+                 obs_shape: Tuple,
+                 buffer_size: int
+                 ):
         self._buffer_size = buffer_size
         self._states = zeros(obs_shape, dtype=float64)
         self._actions = zeros((buffer_size,), dtype=int64)
@@ -64,9 +65,19 @@ class ReplayBuffer:
 
 
 @numba.njit
-def sample_batch(num_samples: int, states: ndarray, actions: ndarray, rewards: ndarray,
-                 observations: ndarray, dones: ndarray, batch_size: int = 64) -> Tuple[ndarray, ndarray, ndarray, ndarray, ndarray]:
+def sample_batch(num_samples: int,
+                 states: ndarray,
+                 actions: ndarray, rewards: ndarray,
+                 observations: ndarray,
+                 dones: ndarray,
+                 batch_size: int
+                 ) -> Tuple[ndarray, ndarray, ndarray, ndarray, ndarray]:
     random_indices: ndarray = randint(0, num_samples, batch_size)
-    batch = (states[random_indices], actions[random_indices], rewards[random_indices],
-             observations[random_indices], dones[random_indices])
+    batch = (
+        states[random_indices],
+        actions[random_indices],
+        rewards[random_indices],
+        observations[random_indices],
+        dones[random_indices]
+    )
     return batch

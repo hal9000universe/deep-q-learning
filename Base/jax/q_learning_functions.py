@@ -15,8 +15,11 @@ def generate_train_step(optimizer: optax.adam, model: hk.Transformed) -> Callabl
     compute_loss: Callable = generate_loss_computation(model)
 
     @jax.jit
-    def train_step(params: hk.Params, opt_state: Mapping,
-                   states: jnp.ndarray, q_targets: jnp.ndarray) -> Tuple[hk.Params, Mapping]:
+    def train_step(params: hk.Params,
+                   opt_state: Mapping,
+                   states: jnp.ndarray,
+                   q_targets: jnp.ndarray
+                   ) -> Tuple[hk.Params, Mapping]:
         grads = jax.grad(compute_loss)(params, states, q_targets)
         updates, opt_state = optimizer.update(grads, opt_state)
         params = optax.apply_updates(params, updates)
@@ -36,16 +39,22 @@ def generate_loss_computation(model: hk.Transformed) -> Callable:
 
 def generate_q_target_computation(model: hk.Transformed, gamma: float, env: gym.Env) -> Callable:
     @jax.jit
-    def compute_q_targets(params: hk.Params, target_params: hk.Params,
-                          states: jnp.ndarray, actions: ndarray, rewards: ndarray,
-                          observations: ndarray, dones: ndarray) -> jnp.ndarray:
+    def compute_q_targets(params: hk.Params,
+                          target_params: hk.Params,
+                          states: jnp.ndarray,
+                          actions: ndarray,
+                          rewards: ndarray,
+                          observations: ndarray,
+                          dones: ndarray
+                          ) -> jnp.ndarray:
         q: ndarray = model.apply(params, states)
         next_q: ndarray = model.apply(params, observations)
         next_q_tm: ndarray = model.apply(target_params, observations)
         max_actions: ndarray = argmax(next_q, axis=1)
         targets: List = []
         for index, (max_action, action, done) in enumerate(zip(max_actions, actions, dones)):
-            target_val: float = rewards[index] + (1.0 - done) * (gamma * next_q_tm[index, max_action] - q[index, action])
+            target_val: float = rewards[index] + (1.0 - done) * (
+                    gamma * next_q_tm[index, max_action] - q[index, action])
             q_target: ndarray = q[index] + target_val * one_hot(action, env.action_space.n)
             targets.append(q_target)
         targets: jnp.ndarray = jnp.array(targets)
@@ -59,11 +68,16 @@ def action_computation(network: hk.Transformed) -> Callable:
     def compute_action(params: hk.Params, state: ndarray) -> ndarray:
         action: ndarray = argmax(network.apply(params, state))
         return action
+
     return compute_action
 
 
-def preprocessing(states: ndarray, actions: ndarray, rewards: ndarray, observations: ndarray,
-                  dones: ndarray) -> Tuple[jnp.ndarray, ndarray, ndarray, ndarray, ndarray]:
+def preprocessing(states: ndarray,
+                  actions: ndarray,
+                  rewards: ndarray,
+                  observations: ndarray,
+                  dones: ndarray
+                  ) -> Tuple[jnp.ndarray, ndarray, ndarray, ndarray, ndarray]:
     states: jnp.ndarray = jax.numpy.asarray(states)
     dones = dones.astype(float64)
     return states, actions, rewards, observations, dones

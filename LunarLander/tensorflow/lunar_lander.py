@@ -265,7 +265,7 @@ if __name__ == '__main__':
     checkpoint: tf.train.Checkpoint = tf.train.Checkpoint(q_model=dddqn, optimizer=adam,
                                                           target_model=agent.target_model)
     manager: tf.train.CheckpointManager = tf.train.CheckpointManager(checkpoint, 'lunar_lander/', max_to_keep=3)
-    checkpoint.restore(manager.latest_checkpoint)
+    # checkpoint.restore(manager.latest_checkpoint)
 
     # train
     agent.training()

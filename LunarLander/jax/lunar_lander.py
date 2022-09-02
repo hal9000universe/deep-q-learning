@@ -2,6 +2,7 @@
 import os
 import time
 import numba
+import asyncio
 from statistics import mean
 from pickle import dump, load
 from typing import Mapping, Tuple, List, Any, Callable
@@ -169,6 +170,7 @@ def generate_action_computation(network: hk.Transformed) -> Callable:
     return action_computation
 
 
+@jax.jit
 def preprocessing(states: ndarray, actions: ndarray, rewards: ndarray, observations: ndarray,
                   dones: ndarray) -> Tuple[jnp.ndarray, ndarray, ndarray, ndarray, ndarray]:
     states: jnp.ndarray = jax.numpy.asarray(states)
@@ -191,10 +193,10 @@ class Agent:
         self._epsilon = EPSILON
         self._episode_rewards = []
 
-    def _update_epsilon(self):
+    async def _update_epsilon(self):
         self._epsilon = max(self._epsilon * EPSILON_DECAY_RATE, MIN_EPSILON)
 
-    def _update_episode_rewards(self, episode_reward: float):
+    async def _update_episode_rewards(self, episode_reward: float):
         self._episode_rewards.append(episode_reward)
         while len(self._episode_rewards) > 50:
             self._episode_rewards.pop(0)
@@ -208,7 +210,7 @@ class Agent:
         else:
             return randint(0, 4)
 
-    def _update_target_model(self):
+    async def _update_target_model(self):
         self._target_params = self._params
 
     def training(self):
@@ -258,16 +260,16 @@ class Agent:
                     break
 
             if episode % REPLACE_FREQUENCY == 0:
-                self._update_target_model()
+                asyncio.run(self._update_target_model())
 
-            if episode % BACKUP_FREQUENCY == 0:
-                save_training_state(self._params)
+            # if episode % BACKUP_FREQUENCY == 0:
+            #     asyncio.run(save_training_state(self._params))
 
-            self._update_epsilon()
-            self._update_episode_rewards(epi_reward)
+            asyncio.run(self._update_epsilon())
+            asyncio.run(self._update_episode_rewards(epi_reward))
 
             if self._average_reward() > 240:
-                save_training_state(self._params)
+                asyncio.run(save_training_state(self._params))
                 return
 
             end: float = time.time()
@@ -276,7 +278,7 @@ class Agent:
                 print('Time: {}s'.format(end - start))
 
 
-def save_training_state(params: hk.Params):
+async def save_training_state(params: hk.Params):
     if not os.path.exists("lunar_lander"):
         os.mkdir("lunar_lander")
     with open("lunar_lander/params.pickle", "wb") as file:
@@ -301,7 +303,7 @@ if __name__ == '__main__':
     BATCH_SIZE: int = 64
     BUFFER_SIZE: int = 100000
     MAX_STEPS: int = 1000
-    MAX_EPISODES: int = 20
+    MAX_EPISODES: int = 10000
     REPLACE_FREQUENCY: int = 50
     BACKUP_FREQUENCY: int = 20
     TRAINING_START: int = 256
@@ -327,3 +329,6 @@ if __name__ == '__main__':
 
     agent = Agent(parameters, optimizer_state)
     agent.training()
+
+    parameters = load_state()
+    visualize_agent()
