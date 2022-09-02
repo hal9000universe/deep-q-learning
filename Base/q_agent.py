@@ -35,6 +35,10 @@ class Agent:
     _replace_frequency: int
     # monitoring
     _episode_rewards: List[float]
+    # functions
+    _compute_action: Callable
+    _compute_q_targets: Callable
+    _train_step: Callable
 
     def __init__(self,
                  network: hk.Transformed,
@@ -78,6 +82,9 @@ class Agent:
         self._back_up_frequency = back_up_frequency
         self._replace_frequency = replace_frequency
         self._episode_rewards = []
+        self._compute_action = action_computation(network)
+        self._compute_q_targets = generate_q_target_computation(network, gamma, env)
+        self._train_step = generate_train_step(optimizer, network)
 
     async def _update_epsilon(self):
         self._epsilon = max(self._epsilon * self._epsilon_decay_rate, self._min_epsilon)
@@ -92,7 +99,7 @@ class Agent:
 
     def _policy(self, state: ndarray) -> int:
         if self._epsilon < uniform(0, 1):
-            return int(action_computation(self._network)(self._params, state))
+            return int(self._compute_action(self._params, state))
         else:
             return randint(0, 4)
 
@@ -101,8 +108,6 @@ class Agent:
 
     def training(self):
         step_count: int = 0
-        compute_q_targets: Callable = generate_q_target_computation(self._network, self._gamma, self._env)
-        train_step: Callable = generate_train_step(self._optimizer, self._network)
         for episode in range(self._max_episodes):
             start: float = time.time()
             epi_reward: float = 0.
@@ -132,17 +137,17 @@ class Agent:
                                                                                   rewards,
                                                                                   observations,
                                                                                   dones)
-                    q_targets: jnp.ndarray = compute_q_targets(self._params,
-                                                               self._target_params,
-                                                               states,
-                                                               actions,
-                                                               rewards,
-                                                               observations,
-                                                               dones)
-                    self._params, self._opt_state = train_step(self._params,
-                                                               self._opt_state,
-                                                               states,
-                                                               q_targets)
+                    q_targets: jnp.ndarray = self._compute_q_targets(self._params,
+                                                                     self._target_params,
+                                                                     states,
+                                                                     actions,
+                                                                     rewards,
+                                                                     observations,
+                                                                     dones)
+                    self._params, self._opt_state = self._train_step(self._params,
+                                                                     self._opt_state,
+                                                                     states,
+                                                                     q_targets)
 
                 if done:
                     break
