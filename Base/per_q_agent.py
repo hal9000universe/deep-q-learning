@@ -5,11 +5,13 @@ from statistics import mean
 from random import uniform
 
 # nn & rl
-from numpy.random import randint
+from numpy import vectorize
+from numpy.random import randint, uniform
 
 # lib
 from Base.prioritized_experience_replay import PrioritizedExperienceReplay, sample_batch
 from Base.q_learning_functions import *
+from Base.sum_tree import retrieve
 from Base.utils import save_state
 
 
@@ -125,19 +127,22 @@ class PERAgent:
                 if step == self._max_steps:
                     done: bool = True
 
-                self._per.add(state[0], action, reward, observation[0], done)
+                self._per.add_experience(0., state[0], action, reward, observation[0], done)
                 state = observation
                 epi_reward += reward
 
                 if self._per.size >= self._training_start and step_count % self._train_frequency == 0:
+                    max_val: float = self._per.tree[0]
+                    values: ndarray = uniform(0.0, max_val, self._batch_size)
+                    indices: ndarray = vectorize(retrieve, excluded={0})(self._per.tree, values)
                     states, actions, rewards, observations, dones, is_weights = sample_batch(self._per.size,
-                                                                                             self._per.tree,
                                                                                              self._per.priorities,
                                                                                              self._per.states,
                                                                                              self._per.actions,
                                                                                              self._per.rewards,
                                                                                              self._per.observations,
                                                                                              self._per.dones,
+                                                                                             indices,
                                                                                              self._batch_size,
                                                                                              self._per.alpha)
                     states, actions, rewards, observations, dones, is_weights = per_preprocessing(states,

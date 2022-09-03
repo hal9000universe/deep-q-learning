@@ -4,7 +4,6 @@ from typing import Tuple
 # nn & rl
 import numpy as np
 from numpy import power, take_along_axis, zeros, float64, reshape
-from numpy.random import uniform
 
 # lib
 from Base.replay_buffer import ReplayBuffer
@@ -58,7 +57,7 @@ class PrioritizedExperienceReplay(ReplayBuffer):
         return self.beta
 
     def _update(self, index: int, priority: float):
-        update(self._tree[self._buffer_size: 2 * self._buffer_size - 1][index], self._adjust_priority(priority))
+        update(self._tree, index, self._adjust_priority(priority))
 
     def add_experience(self,
                        priority: float,
@@ -77,20 +76,18 @@ class PrioritizedExperienceReplay(ReplayBuffer):
         return power(priority + self._min_priority, self._alpha)
 
 
+@numba.njit
 def sample_batch(num_samples: int,
-                 tree: ndarray,
                  priorities: ndarray,
                  states: ndarray,
                  actions: ndarray,
                  rewards: ndarray,
                  observations: ndarray,
                  dones: ndarray,
+                 indices: ndarray,
                  batch_size: int,
                  alpha: float
                  ) -> Tuple[ndarray, ndarray, ndarray, ndarray, ndarray, ndarray]:
-    max_val: float = tree[0]
-    values: ndarray = uniform(0.0, max_val, batch_size)
-    indices: ndarray = retrieve(tree, values)
     expanded_indices: ndarray = reshape(indices, (batch_size, 1))
     priority_samples: ndarray = take_along_axis(priorities, indices, 0)
     state_samples: ndarray = take_along_axis(states, expanded_indices, 0)

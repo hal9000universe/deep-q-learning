@@ -104,7 +104,6 @@ def generate_priority_and_q_target_computation(model: hk.Transformed, gamma: flo
                                        observations: ndarray,
                                        dones: ndarray
                                        ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        print(states.shape)
         q: ndarray = model.apply(params, states)
         next_q: ndarray = model.apply(params, observations)
         next_q_tm: ndarray = model.apply(target_params, observations)
