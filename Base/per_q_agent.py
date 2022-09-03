@@ -8,12 +8,12 @@ from random import uniform
 from numpy.random import randint
 
 # lib
-from Base.replay_buffer import ReplayBuffer, sample_batch
+from Base.prioritized_experience_replay import PrioritizedExperienceReplay, sample_batch
 from Base.q_learning_functions import *
 from Base.utils import save_state
 
 
-class Agent:
+class PERAgent:
     # rl
     _network: hk.Transformed
     _params: hk.Params
@@ -36,7 +36,7 @@ class Agent:
     _episode_rewards: List[float]
     # functions
     _compute_action: Callable
-    _compute_q_targets: Callable
+    _compute_priority_and_q_targets: Callable
     _train_step: Callable
 
     def __init__(self,
@@ -48,6 +48,9 @@ class Agent:
                  buffer_size: int,
                  obs_placeholder_shape: Tuple,
                  ac_placeholder_shape: Tuple,
+                 alpha: float,
+                 beta: float,
+                 min_priority: float,
                  gamma: float,
                  epsilon: float,
                  epsilon_decay_rate: float,
@@ -58,7 +61,7 @@ class Agent:
                  batch_size: int,
                  train_frequency: int,
                  back_up_frequency: int,
-                 replace_frequency: int
+                 replace_frequency: int,
                  ):
         self._network = network
         self._params = params
@@ -66,9 +69,12 @@ class Agent:
         self._opt_state = opt_state
         self._target_params = params
         self._env = env
-        self._replay_buffer = ReplayBuffer(buffer_size=buffer_size,
-                                           obs_placeholder_shape=obs_placeholder_shape,
-                                           ac_placeholder_shape=ac_placeholder_shape)
+        self._per = PrioritizedExperienceReplay(buffer_size=buffer_size,
+                                                obs_placeholder_shape=obs_placeholder_shape,
+                                                ac_placeholder_shape=ac_placeholder_shape,
+                                                alpha=alpha,
+                                                beta=beta,
+                                                min_priority=min_priority)
         self._gamma = gamma
         self._epsilon = epsilon
         self._epsilon_decay_rate = epsilon_decay_rate
@@ -82,8 +88,8 @@ class Agent:
         self._replace_frequency = replace_frequency
         self._episode_rewards = []
         self._compute_action = action_computation(network)
-        self._compute_q_targets = generate_q_target_computation(network, gamma, env)
-        self._train_step = generate_train_step(optimizer, network)
+        self._compute_priorities_and_q_targets = generate_priority_and_q_target_computation(network, gamma, env)
+        self._train_step = generate_per_train_step(optimizer, network)
 
     async def _update_epsilon(self):
         self._epsilon = max(self._epsilon * self._epsilon_decay_rate, self._min_epsilon)
@@ -119,34 +125,39 @@ class Agent:
                 if step == self._max_steps:
                     done: bool = True
 
-                self._replay_buffer.add(state[0], action, reward, observation[0], done)
+                self._per.add(state[0], action, reward, observation[0], done)
                 state = observation
                 epi_reward += reward
 
-                if self._replay_buffer.size >= self._training_start and step_count % self._train_frequency == 0:
-                    states, actions, rewards, observations, dones = sample_batch(self._replay_buffer.size,
-                                                                                 self._replay_buffer.states,
-                                                                                 self._replay_buffer.actions,
-                                                                                 self._replay_buffer.rewards,
-                                                                                 self._replay_buffer.observations,
-                                                                                 self._replay_buffer.dones,
-                                                                                 self._batch_size)
-                    states, actions, rewards, observations, dones = preprocessing(states,
-                                                                                  actions,
-                                                                                  rewards,
-                                                                                  observations,
-                                                                                  dones)
-                    q_targets: jnp.ndarray = self._compute_q_targets(self._params,
-                                                                     self._target_params,
-                                                                     states,
-                                                                     actions,
-                                                                     rewards,
-                                                                     observations,
-                                                                     dones)
+                if self._per.size >= self._training_start and step_count % self._train_frequency == 0:
+                    states, actions, rewards, observations, dones, is_weights = sample_batch(self._per.size,
+                                                                                             self._per.tree,
+                                                                                             self._per.priorities,
+                                                                                             self._per.states,
+                                                                                             self._per.actions,
+                                                                                             self._per.rewards,
+                                                                                             self._per.observations,
+                                                                                             self._per.dones,
+                                                                                             self._batch_size,
+                                                                                             self._per.alpha)
+                    states, actions, rewards, observations, dones, is_weights = per_preprocessing(states,
+                                                                                                  actions,
+                                                                                                  rewards,
+                                                                                                  observations,
+                                                                                                  dones,
+                                                                                                  is_weights)
+                    priorities, q_targets = self._compute_priorities_and_q_targets(self._params,
+                                                                                   self._target_params,
+                                                                                   states,
+                                                                                   actions,
+                                                                                   rewards,
+                                                                                   observations,
+                                                                                   dones)
                     self._params, self._opt_state = self._train_step(self._params,
                                                                      self._opt_state,
                                                                      states,
-                                                                     q_targets)
+                                                                     q_targets,
+                                                                     is_weights)
 
                 if done:
                     break

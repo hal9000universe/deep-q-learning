@@ -2,7 +2,7 @@
 from numpy import zeros
 
 # custom
-from Base.q_agent import *
+from Base.per_q_agent import *
 from Base.utils import load_state
 from Base.visualization import generate_visualization
 from LunarLander.env import ObsWrapper
@@ -23,6 +23,9 @@ if __name__ == '__main__':
     MIN_EPSILON: float = 0.001
     GAMMA: float = 0.999
     LEARNING_RATE: float = 0.001
+    ALPHA: float = 0.4
+    BETA: float = 0.6
+    MIN_PRIORITY: float = 0.01
 
     env: gym.Env = ObsWrapper(gym.make('LunarLander-v2'), MAX_STEPS)
     NUM_ACTIONS: int = env.action_space.n
@@ -36,7 +39,7 @@ if __name__ == '__main__':
     parameters: hk.Params = model.init(rng, test_input)
     optimizer_state = optimizer.init(parameters)
 
-    agent = Agent(
+    agent = PERAgent(
         network=model,
         params=parameters,
         optimizer=optimizer,
@@ -45,6 +48,9 @@ if __name__ == '__main__':
         buffer_size=BUFFER_SIZE,
         obs_placeholder_shape=(BUFFER_SIZE, 9),
         ac_placeholder_shape=(BUFFER_SIZE,),
+        alpha=ALPHA,
+        beta=BETA,
+        min_priority=MIN_PRIORITY,
         gamma=GAMMA,
         epsilon=EPSILON,
         epsilon_decay_rate=EPSILON_DECAY_RATE,
