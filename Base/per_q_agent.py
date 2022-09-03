@@ -5,6 +5,7 @@ from statistics import mean
 from random import uniform
 
 # nn & rl
+from numpy import vectorize
 from numpy.random import randint, uniform
 
 # lib
@@ -38,8 +39,9 @@ class PERAgent:
     _episode_rewards: List[float]
     # functions
     _compute_action: Callable
-    _compute_priority_and_q_targets: Callable
+    _compute_priorities_and_q_targets: Callable
     _train_step: Callable
+    _update_priorities: Callable
 
     def __init__(self,
                  network: hk.Transformed,
@@ -92,6 +94,7 @@ class PERAgent:
         self._compute_action = action_computation(network)
         self._compute_priorities_and_q_targets = generate_priority_and_q_target_computation(network, gamma, env)
         self._train_step = generate_per_train_step(optimizer, network)
+        self._update_priorities = vectorize(self._per.update)
 
     async def _update_epsilon(self):
         self._epsilon = max(self._epsilon * self._epsilon_decay_rate, self._min_epsilon)
@@ -156,6 +159,7 @@ class PERAgent:
                                                                                    rewards,
                                                                                    observations,
                                                                                    dones)
+                    self._update_priorities(indices, priorities)
                     self._params, self._opt_state = self._train_step(self._params,
                                                                      self._opt_state,
                                                                      states,

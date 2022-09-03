@@ -56,7 +56,7 @@ class PrioritizedExperienceReplay(ReplayBuffer):
     def beta(self):
         return self.beta
 
-    def _update(self, index: int, priority: float):
+    def update(self, index: int, priority: float):
         update(self._tree, index, self._adjust_priority(priority))
 
     def add_experience(self,
@@ -69,7 +69,7 @@ class PrioritizedExperienceReplay(ReplayBuffer):
                        ):
         index: int = self._counter % self._buffer_size
         self._priorities[index] = priority
-        self._update(index, priority)
+        self.update(index, priority)
         self.add(state, action, reward, observation, done)
 
     def _adjust_priority(self, priority: float) -> float:

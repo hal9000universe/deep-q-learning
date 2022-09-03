@@ -8,7 +8,7 @@ import optax
 import haiku as hk
 import jax.numpy as jnp
 from jax.nn import one_hot
-from numpy import ndarray, argmax, float64
+from numpy import ndarray, argmax, float64, reshape
 
 
 def generate_per_train_step(optimizer: optax.adam, model: hk.Transformed) -> Callable:
@@ -58,12 +58,12 @@ def generate_priority_and_q_target_computation(model: hk.Transformed, gamma: flo
         max_actions: ndarray = argmax(next_q, axis=1)
         targets: List = []
         for index, (max_action, action, done) in enumerate(zip(max_actions, actions, dones)):
-            target_val: float = rewards[index] + (1.0 - done) * (
-                    gamma * next_q_tm[index, max_action] - q[index, action])
+            target_val: float = rewards[index] + (1.0-done) * (gamma*next_q_tm[index, max_action]-q[index, action])
             q_target: ndarray = q[index] + target_val * one_hot(action, env.action_space.n)
             targets.append(q_target)
         targets: jnp.ndarray = jnp.array(targets)
-        error: jnp.ndarray = targets - q
+        two_dim_acs: ndarray = reshape(actions, (actions.shape[0], 1))
+        error: jnp.ndarray = jnp.take_along_axis(targets, two_dim_acs, 1)-jnp.take_along_axis(q, two_dim_acs, 1)
         return error, targets
 
     return compute_priority_and_q_targets
