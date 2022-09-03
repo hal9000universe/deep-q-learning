@@ -4,7 +4,8 @@ import numba
 
 # nn & rl
 import numpy
-from numpy import ndarray
+from numpy import ndarray, vectorize
+from numpy.random import uniform
 
 
 @numba.njit
@@ -35,6 +36,12 @@ def retrieve(tree: ndarray, value):
             value -= tree[2 * i]
             i = 2 * i + 1
     return i - size - 1
+
+
+def v_retrieve(tree: ndarray, batch_size: int) -> ndarray:
+    values: ndarray = uniform(0.0, tree[0], batch_size)
+    indices: ndarray = vectorize(retrieve, excluded={0})(tree, values)
+    return indices
 
 
 def gen_tree(buffer_size: int) -> ndarray:

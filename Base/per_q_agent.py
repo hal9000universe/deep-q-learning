@@ -5,13 +5,13 @@ from statistics import mean
 from random import uniform
 
 # nn & rl
-from numpy import vectorize
 from numpy.random import randint, uniform
 
 # lib
 from Base.prioritized_experience_replay import PrioritizedExperienceReplay, sample_batch
-from Base.q_learning_functions import *
-from Base.sum_tree import retrieve
+from Base.per_q_learning_functions import *
+from Base.q_learning_functions import action_computation
+from Base.sum_tree import v_retrieve
 from Base.utils import save_state
 
 
@@ -132,9 +132,7 @@ class PERAgent:
                 epi_reward += reward
 
                 if self._per.size >= self._training_start and step_count % self._train_frequency == 0:
-                    max_val: float = self._per.tree[0]
-                    values: ndarray = uniform(0.0, max_val, self._batch_size)
-                    indices: ndarray = vectorize(retrieve, excluded={0})(self._per.tree, values)
+                    indices: ndarray = v_retrieve(self._per.tree, self._batch_size)
                     states, actions, rewards, observations, dones, is_weights = sample_batch(self._per.size,
                                                                                              self._per.priorities,
                                                                                              self._per.states,
