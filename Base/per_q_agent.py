@@ -13,7 +13,7 @@ from Base.prioritized_experience_replay import PrioritizedExperienceReplay, samp
 from Base.per_q_learning_functions import *
 from Base.q_learning_functions import action_computation
 from Base.sum_tree import v_retrieve
-from Base.utils import save_state
+from Base.utils import generate_saving
 
 
 class PERAgent:
@@ -42,6 +42,7 @@ class PERAgent:
     _compute_priorities_and_q_targets: Callable
     _train_step: Callable
     _update_priorities: Callable
+    _save_state: Callable
 
     def __init__(self,
                  network: hk.Transformed,
@@ -66,6 +67,8 @@ class PERAgent:
                  train_frequency: int,
                  back_up_frequency: int,
                  replace_frequency: int,
+                 reward_to_reach: float,
+                 saving_directory: str,
                  ):
         self._network = network
         self._params = params
@@ -90,11 +93,13 @@ class PERAgent:
         self._train_frequency = train_frequency
         self._back_up_frequency = back_up_frequency
         self._replace_frequency = replace_frequency
+        self._reward_to_reach = reward_to_reach
         self._episode_rewards = []
         self._compute_action = action_computation(network)
         self._compute_priorities_and_q_targets = generate_priority_and_q_target_computation(network, gamma, env)
         self._train_step = generate_per_train_step(optimizer, network)
         self._update_priorities = vectorize(self._per.update)
+        self._save_state = generate_saving(saving_directory)
 
     async def _update_epsilon(self):
         self._epsilon = max(self._epsilon * self._epsilon_decay_rate, self._min_epsilon)
@@ -173,13 +178,13 @@ class PERAgent:
                 asyncio.run(self._update_target_model())
 
             if episode % self._back_up_frequency == 0:
-                asyncio.run(save_state(self._params))
+                asyncio.run(self._save_state(self._params))
 
             asyncio.run(self._update_epsilon())
             asyncio.run(self._update_episode_rewards(epi_reward))
 
-            if self._average_reward() > 240:
-                asyncio.run(save_state(self._params))
+            if self._average_reward() > self._reward_to_reach:
+                asyncio.run(self._save_state(self._params))
                 return
 
             end: float = time.time()

@@ -10,7 +10,7 @@ from numpy.random import randint
 # lib
 from Base.replay_buffer import ReplayBuffer, sample_batch
 from Base.q_learning_functions import *
-from Base.utils import save_state
+from Base.utils import generate_saving
 
 
 class Agent:
@@ -32,12 +32,14 @@ class Agent:
     _train_frequency: int
     _back_up_frequency: int
     _replace_frequency: int
+    _reward_to_reach: float
     # monitoring
     _episode_rewards: List[float]
     # functions
     _compute_action: Callable
     _compute_q_targets: Callable
     _train_step: Callable
+    _save_state: Callable
 
     def __init__(self,
                  network: hk.Transformed,
@@ -58,7 +60,9 @@ class Agent:
                  batch_size: int,
                  train_frequency: int,
                  back_up_frequency: int,
-                 replace_frequency: int
+                 replace_frequency: int,
+                 reward_to_reach: float,
+                 saving_directory: str,
                  ):
         self._network = network
         self._params = params
@@ -80,10 +84,12 @@ class Agent:
         self._train_frequency = train_frequency
         self._back_up_frequency = back_up_frequency
         self._replace_frequency = replace_frequency
+        self._reward_to_reach = reward_to_reach
         self._episode_rewards = []
         self._compute_action = action_computation(network)
         self._compute_q_targets = generate_q_target_computation(network, gamma, env)
         self._train_step = generate_train_step(optimizer, network)
+        self._save_state = generate_saving(saving_directory)
 
     async def _update_epsilon(self):
         self._epsilon = max(self._epsilon * self._epsilon_decay_rate, self._min_epsilon)
@@ -155,13 +161,13 @@ class Agent:
                 asyncio.run(self._update_target_model())
 
             if episode % self._back_up_frequency == 0:
-                asyncio.run(save_state(self._params))
+                asyncio.run(self._save_state(self._params))
 
             asyncio.run(self._update_epsilon())
             asyncio.run(self._update_episode_rewards(epi_reward))
 
-            if self._average_reward() > 240:
-                asyncio.run(save_state(self._params))
+            if self._average_reward() > self._reward_to_reach:
+                asyncio.run(self._save_state(self._params))
                 return
 
             end: float = time.time()

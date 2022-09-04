@@ -1,7 +1,6 @@
 # custom
 from Base.q_agent import *
-from Base.utils import load_state
-from Base.visualization import generate_visualization
+from Base.utils import generate_loading, generate_visualization
 from LunarLander.env import ObsWrapper
 from LunarLander.dddqn import Model
 
@@ -20,6 +19,8 @@ if __name__ == '__main__':
     MIN_EPSILON: float = 0.001
     GAMMA: float = 0.999
     LEARNING_RATE: float = 0.001
+    REWARD_TO_REACH: float = 240.
+    DIR: str = "lunar_lander"
 
     env: gym.Env = ObsWrapper(gym.make('LunarLander-v2'), MAX_STEPS)
     NUM_ACTIONS: int = env.action_space.n
@@ -53,10 +54,14 @@ if __name__ == '__main__':
         train_frequency=TRAIN_FREQUENCY,
         back_up_frequency=BACKUP_FREQUENCY,
         replace_frequency=REPLACE_FREQUENCY,
+        reward_to_reach=REWARD_TO_REACH,
+        saving_directory=DIR,
     )
-    # agent.training()
+    agent.training()
+
+    load_state: Callable = generate_loading(DIR)
+    visualize: Callable = generate_visualization(env, model)
 
     parameters = load_state()
-    visualize: Callable = generate_visualization(env, model)
     for _ in range(10):
         visualize(parameters)

@@ -3,7 +3,7 @@ import numba
 from typing import Tuple
 
 # nn & rl
-from numpy import zeros, ndarray, int64, float64
+from numpy import zeros, ndarray, int64, float32
 from numpy.random import randint
 
 
@@ -23,10 +23,10 @@ class ReplayBuffer:
                  ac_shape: Tuple
                  ):
         self._buffer_size = buffer_size
-        self._states = zeros(obs_shape, dtype=float64)
+        self._states = zeros(obs_shape, dtype=float32)
         self._actions = zeros(ac_shape, dtype=int64)
-        self._rewards = zeros((buffer_size,), dtype=float64)
-        self._observations = zeros(obs_shape, dtype=float64)
+        self._rewards = zeros((buffer_size,), dtype=float32)
+        self._observations = zeros(obs_shape, dtype=float32)
         self._dones = zeros((buffer_size,), dtype=bool)
         self._counter = 0
         self._num_samples = 0

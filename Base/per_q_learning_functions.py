@@ -8,7 +8,7 @@ import optax
 import haiku as hk
 import jax.numpy as jnp
 from jax.nn import one_hot
-from numpy import ndarray, argmax, float64, reshape
+from numpy import ndarray, argmax, float32, reshape
 
 
 def generate_per_train_step(optimizer: optax.adam, model: hk.Transformed) -> Callable:
@@ -78,6 +78,6 @@ def per_preprocessing(states: ndarray,
                       is_weights: ndarray
                       ) -> Tuple[jnp.ndarray, ndarray, ndarray, ndarray, ndarray, jnp.ndarray]:
     states: jnp.ndarray = jax.numpy.asarray(states)
-    dones = dones.astype(float64)
+    dones = dones.astype(float32)
     is_weights: jnp.ndarray = jax.numpy.asarray(is_weights)
     return states, actions, rewards, observations, dones, is_weights

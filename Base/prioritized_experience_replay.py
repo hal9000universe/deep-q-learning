@@ -3,7 +3,7 @@ from typing import Tuple
 
 # nn & rl
 import numpy as np
-from numpy import power, take_along_axis, zeros, float64, reshape
+from numpy import power, take_along_axis, zeros, float32, reshape
 
 # lib
 from Base.replay_buffer import ReplayBuffer
@@ -35,7 +35,7 @@ class PrioritizedExperienceReplay(ReplayBuffer):
                  ):
         super(PrioritizedExperienceReplay, self).__init__(buffer_size, obs_shape, ac_shape)
         self._tree = gen_tree(buffer_size)
-        self._priorities = zeros((buffer_size,), dtype=float64)
+        self._priorities = zeros((buffer_size,), dtype=float32)
         self._alpha = alpha
         self._beta = beta
         self._min_priority = min_priority
