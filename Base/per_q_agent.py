@@ -74,8 +74,8 @@ class PERAgent:
         self._target_params = params
         self._env = env
         self._per = PrioritizedExperienceReplay(buffer_size=buffer_size,
-                                                obs_placeholder_shape=obs_placeholder_shape,
-                                                ac_placeholder_shape=ac_placeholder_shape,
+                                                obs_shape=obs_placeholder_shape,
+                                                ac_shape=ac_placeholder_shape,
                                                 alpha=alpha,
                                                 beta=beta,
                                                 min_priority=min_priority)

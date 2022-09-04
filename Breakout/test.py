@@ -2,8 +2,8 @@
 from Base.q_agent import *
 from Base.utils import load_state
 from Base.visualization import generate_visualization
-from LunarLander.env import ObsWrapper
-from LunarLander.dddqn import Model
+from Breakout.env import create_env
+from Breakout.dddqn import Model
 
 
 if __name__ == '__main__':
@@ -21,8 +21,10 @@ if __name__ == '__main__':
     GAMMA: float = 0.999
     LEARNING_RATE: float = 0.001
 
-    env: gym.Env = ObsWrapper(gym.make('LunarLander-v2'), MAX_STEPS)
+    env: gym.Env = create_env()
     NUM_ACTIONS: int = env.action_space.n
+    OBS_SHAPE: Tuple = (BUFFER_SIZE, 4, 210, 160)
+    AC_SHAPE: Tuple = (BUFFER_SIZE,)
 
     rng: jax.random.PRNGKeyArray = jax.random.PRNGKey(time.time_ns())
     test_input: ndarray = env.reset()
@@ -40,8 +42,8 @@ if __name__ == '__main__':
         opt_state=optimizer_state,
         env=env,
         buffer_size=BUFFER_SIZE,
-        obs_shape=(BUFFER_SIZE, 9),
-        ac_shape=(BUFFER_SIZE,),
+        obs_shape=OBS_SHAPE,
+        ac_shape=AC_SHAPE,
         gamma=GAMMA,
         epsilon=EPSILON,
         epsilon_decay_rate=EPSILON_DECAY_RATE,
@@ -54,9 +56,8 @@ if __name__ == '__main__':
         back_up_frequency=BACKUP_FREQUENCY,
         replace_frequency=REPLACE_FREQUENCY,
     )
-    # agent.training()
+    agent.training()
 
     parameters = load_state()
     visualize: Callable = generate_visualization(env, model)
-    for _ in range(10):
-        visualize(parameters)
+    visualize(parameters)

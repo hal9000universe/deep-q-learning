@@ -46,8 +46,8 @@ class Agent:
                  opt_state: Mapping,
                  env: gym.Env,
                  buffer_size: int,
-                 obs_placeholder_shape: Tuple,
-                 ac_placeholder_shape: Tuple,
+                 obs_shape: Tuple,
+                 ac_shape: Tuple,
                  gamma: float,
                  epsilon: float,
                  epsilon_decay_rate: float,
@@ -67,8 +67,8 @@ class Agent:
         self._target_params = params
         self._env = env
         self._replay_buffer = ReplayBuffer(buffer_size=buffer_size,
-                                           obs_placeholder_shape=obs_placeholder_shape,
-                                           ac_placeholder_shape=ac_placeholder_shape)
+                                           obs_shape=obs_shape,
+                                           ac_shape=ac_shape)
         self._gamma = gamma
         self._epsilon = epsilon
         self._epsilon_decay_rate = epsilon_decay_rate
@@ -165,6 +165,6 @@ class Agent:
                 return
 
             end: float = time.time()
-            if episode % 10 == 0:
+            if episode % 1 == 0:
                 print("Episode: {} -- Reward: {} -- Average: {}".format(episode, epi_reward, self._average_reward()))
                 print('Time: {}s'.format(end - start))
