@@ -1,6 +1,9 @@
+# py
+from typing import Any, Tuple
+
+# nn & rl
 import gym
 from numpy import ndarray, append, newaxis
-from typing import Any, Tuple
 
 
 class ObsWrapper(gym.Wrapper):

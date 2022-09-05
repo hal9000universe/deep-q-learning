@@ -1,4 +1,4 @@
-# custom
+# lib
 from Base.q_agent import *
 from Base.utils import generate_loading, generate_visualization
 from Breakout.env import create_env

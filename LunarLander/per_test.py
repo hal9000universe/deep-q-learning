@@ -1,7 +1,7 @@
 # nn & rl
 from numpy import zeros
 
-# custom
+# lib
 from Base.per_q_agent import *
 from Base.utils import generate_loading, generate_visualization
 from LunarLander.env import ObsWrapper
