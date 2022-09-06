@@ -1,11 +1,11 @@
 # py
 import time
-from typing import Tuple
+from typing import Tuple, List
 
 # nn & rl
 import jax
 import haiku as hk
-from numpy import ndarray, zeros, float32
+from numpy import ndarray
 
 
 class FeedForward(hk.Module):
@@ -48,26 +48,27 @@ class TransformerLayer(hk.Module):
         return out2
 
 
-if __name__ == '__main__':
-    num_heads: int = 2
-    key_size: int = 2
-    w_init_scale: float = 1.0
-    mha_in: Tuple = (num_heads, key_size, w_init_scale)
-    dff: int = 256
-    d_model: int = 4
-    n: Tuple = (dff, d_model)
-    dropout_rate: float = 0.2
+class Transformer(hk.Module):
+    _layers: List
+    _flatten: hk.Flatten
+    _lin: hk.Linear
 
-    transformer_layer: hk.Transformed = hk.without_apply_rng(
-        hk.transform(
-            lambda *args: TransformerLayer(mha_in, n, dropout_rate)(*args)
-        )
-    )
+    def __init__(self,
+                 num_layers: int,
+                 init_params: List,
+                 num_actions: int
+                 ):
+        super(Transformer, self).__init__()
+        self._layers = []
+        for layer in range(num_layers):
+            transformer_layer: TransformerLayer = TransformerLayer(*init_params[layer])
+            self._layers.append(transformer_layer)
+        self._flatten = hk.Flatten()
+        self._lin = hk.Linear(num_actions)
 
-    rng: jax.random.PRNGKeyArray = jax.random.PRNGKey(time.time_ns())
-    test_inp: ndarray = zeros((84, 84, 4), dtype=float32)
-
-    params: hk.Params = transformer_layer.init(rng, test_inp)
-
-    output: ndarray = transformer_layer.apply(params, test_inp)
-    print(output.shape)
+    def __call__(self, inp: ndarray) -> ndarray:
+        for layer in self._layers:
+            inp = layer(inp)
+        out = self._flatten(inp[:, :, 0])
+        out = self._lin(out)
+        return out
