@@ -69,6 +69,6 @@ class Transformer(hk.Module):
     def __call__(self, inp: ndarray) -> ndarray:
         for layer in self._layers:
             inp = layer(inp)
-        out = self._flatten(inp[:, :, 0])
+        out = self._flatten(inp[:, :, :, 0])
         out = self._lin(out)
         return out
