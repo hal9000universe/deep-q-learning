@@ -8,7 +8,7 @@ from Base.transformer import Transformer
 class PongFormer(Transformer):
 
     def __init__(self):
-        num_layers: int = 2
+        num_layers: int = 3
         num_actions: int = 6
         num_heads: int = 12
         key_size: int = 12

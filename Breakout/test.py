@@ -1,14 +1,25 @@
+# py
+import time
+from typing import Callable, Tuple
+
+# nn & rl
+import gym
+import jax
+import haiku as hk
+import optax
+from numpy import ndarray
+
 # lib
-from Base.q_agent import *
+from Base.q_agent import Agent
 from Base.utils import generate_loading, generate_visualization
 from Breakout.env import create_env
 from Breakout.dddqn import Model
 
 
 if __name__ == '__main__':
-    BATCH_SIZE: int = 64
+    BATCH_SIZE: int = 32
     BUFFER_SIZE: int = 100000
-    MAX_STEPS: int = 1000
+    MAX_STEPS: int = 10000
     MAX_EPISODES: int = 10000
     REPLACE_FREQUENCY: int = 50
     BACKUP_FREQUENCY: int = 20

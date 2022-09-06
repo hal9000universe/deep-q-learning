@@ -1,5 +1,16 @@
+# py
+import time
+from typing import Callable, Tuple
+
+# nn & rl
+import gym
+import jax
+import haiku as hk
+import optax
+from numpy import ndarray
+
 # lib
-from Base.q_agent import *
+from Base.q_agent import Agent
 from Base.utils import generate_loading, generate_visualization
 from LunarLander.env import ObsWrapper
 from LunarLander.dddqn import Model
@@ -23,6 +34,8 @@ if __name__ == '__main__':
     DIR: str = "lunar_lander"
 
     env: gym.Env = ObsWrapper(gym.make('LunarLander-v2'), MAX_STEPS)
+    obs_shape: Tuple = (BUFFER_SIZE, 9)
+    ac_shape: Tuple = (BUFFER_SIZE,)
     NUM_ACTIONS: int = env.action_space.n
 
     rng: jax.random.PRNGKeyArray = jax.random.PRNGKey(time.time_ns())
@@ -41,8 +54,8 @@ if __name__ == '__main__':
         opt_state=optimizer_state,
         env=env,
         buffer_size=BUFFER_SIZE,
-        obs_shape=(BUFFER_SIZE, 9),
-        ac_shape=(BUFFER_SIZE,),
+        obs_shape=obs_shape,
+        ac_shape=ac_shape,
         gamma=GAMMA,
         epsilon=EPSILON,
         epsilon_decay_rate=EPSILON_DECAY_RATE,

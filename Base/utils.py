@@ -1,6 +1,6 @@
 # py
 import os
-from typing import Callable
+from typing import Callable, Any
 from time import time
 from pickle import dump, load
 
@@ -10,11 +10,12 @@ import haiku as hk
 from numpy import ndarray, argmax
 
 
-def stop_time(name: str, fun: Callable, *args):
+def stop_time(name: str, fun: Callable, *args) -> Any:
     start: float = time()
-    fun(*args)
+    out = fun(*args)
     stop: float = time()
     print("{}: {}s".format(name, stop - start))
+    return out
 
 
 def generate_saving(directory: str) -> Callable:

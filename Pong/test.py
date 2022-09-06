@@ -1,5 +1,16 @@
+# py
+import time
+from typing import Callable, Tuple
+
+# nn & rl
+import gym
+import jax
+import haiku as hk
+import optax
+from numpy import ndarray
+
 # lib
-from Base.q_agent import *
+from Base.q_agent import Agent
 from Base.utils import generate_loading, generate_visualization
 from Pong.env import create_env
 from Pong.dqn import PongFormer

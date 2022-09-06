@@ -37,7 +37,7 @@ def generate_loss_computation(model: hk.Transformed) -> Callable:
     return compute_loss
 
 
-def generate_q_target_computation(model: hk.Transformed, gamma: float, env: gym.Env) -> Callable:
+def generate_q_target_comp(model: hk.Transformed, gamma: float, env: gym.Env) -> Callable:
     @jax.jit
     def compute_q_targets(params: hk.Params,
                           target_params: hk.Params,
