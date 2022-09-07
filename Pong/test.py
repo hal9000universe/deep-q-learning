@@ -17,19 +17,19 @@ from Pong.dqn import PongFormer
 
 
 if __name__ == '__main__':
-    BATCH_SIZE: int = 32
+    BATCH_SIZE: int = 64
     BUFFER_SIZE: int = 100000
-    MAX_STEPS: int = 10000
+    MAX_STEPS: int = 100000
     MAX_EPISODES: int = 10000
     REPLACE_FREQUENCY: int = 20
-    BACKUP_FREQUENCY: int = 30
-    TRAINING_START: int = 256
+    BACKUP_FREQUENCY: int = 10
+    TRAINING_START: int = 40000
     TRAIN_FREQUENCY: int = 4
     EPSILON: float = 1.0
     EPSILON_DECAY_RATE: float = 0.995
     MIN_EPSILON: float = 0.001
     GAMMA: float = 0.999
-    LEARNING_RATE: float = 0.001
+    LEARNING_RATE: float = 0.00025
     REWARD_TO_REACH: float = 100.
     DIR: str = "pong"
 
@@ -70,6 +70,7 @@ if __name__ == '__main__':
         reward_to_reach=REWARD_TO_REACH,
         num_actions=NUM_ACTIONS,
         saving_directory=DIR,
+        timed=False,
     )
     agent.training()
 

@@ -35,7 +35,7 @@ if __name__ == '__main__':
 
     env: gym.Env = create_env()
     NUM_ACTIONS: int = env.action_space.n
-    OBS_SHAPE: Tuple = (BUFFER_SIZE, 4, 210, 160)
+    OBS_SHAPE: Tuple = (BUFFER_SIZE, 4, 84, 84)
     AC_SHAPE: Tuple = (BUFFER_SIZE,)
 
     rng: jax.random.PRNGKeyArray = jax.random.PRNGKey(time.time_ns())

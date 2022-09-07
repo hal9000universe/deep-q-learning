@@ -215,12 +215,9 @@ class Agent:
     def training(self):
         step_count: int = 0
         for episode in range(self._max_episodes):
-            if self._timed:
-                step_count, epi_reward = stop_time("Time", self._run_episode, step_count, episode)
-            else:
-                step_count, epi_reward = self._run_episode(step_count, episode)
+            step_count, epi_reward = stop_time("Time", self._run_episode, step_count, episode)
 
-            if episode % 100 == 0:
+            if episode % 1 == 0:
                 print("Episode: {} -- Reward: {} -- Average: {}".format(episode, epi_reward, self._average_reward()))
 
             if self._average_reward() > self._reward_to_reach:

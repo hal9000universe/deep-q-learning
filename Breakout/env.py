@@ -1,6 +1,7 @@
 # nn & rl
 import gym
 from numpy import ndarray, newaxis, float32
+from cv2 import resize
 
 
 def transform(obs: ndarray) -> ndarray:
@@ -10,9 +11,15 @@ def transform(obs: ndarray) -> ndarray:
     return obs
 
 
+def rescale(obs: ndarray) -> ndarray:
+    obs = resize(obs, (84, 84))
+    return obs
+
+
 def create_env() -> gym.Env:
     env: gym.Env = gym.make('ALE/Breakout-v5',
                             full_action_space=False)
+    env = gym.wrappers.TransformObservation(env, rescale)
     env = gym.wrappers.FrameStack(env, 4)
     env = gym.wrappers.TransformObservation(env, transform)
     return env
