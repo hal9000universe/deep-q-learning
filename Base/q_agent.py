@@ -38,6 +38,7 @@ class Agent:
     _back_up_frequency: int
     _replace_frequency: int
     _reward_to_reach: float
+    _num_actions: int
     # monitoring
     _episode_rewards: List[float]
     # functions
@@ -68,6 +69,7 @@ class Agent:
                  back_up_frequency: int,
                  replace_frequency: int,
                  reward_to_reach: float,
+                 num_actions: int,
                  saving_directory: str,
                  timed: bool = False,
                  ):
@@ -92,6 +94,7 @@ class Agent:
         self._back_up_frequency = back_up_frequency
         self._replace_frequency = replace_frequency
         self._reward_to_reach = reward_to_reach
+        self._num_actions = num_actions
         self._episode_rewards = []
         self._compute_action = action_computation(network)
         self._compute_q_targets = generate_q_target_comp(network, gamma, env)
@@ -114,7 +117,7 @@ class Agent:
         if self._epsilon < uniform(0, 1):
             return int(self._compute_action(self._params, state))
         else:
-            return randint(0, 4)
+            return randint(0, self._num_actions - 1)
 
     async def _update_target_model(self):
         self._target_params = self._params
@@ -212,9 +215,12 @@ class Agent:
     def training(self):
         step_count: int = 0
         for episode in range(self._max_episodes):
-            step_count, epi_reward = stop_time("Time", self._run_episode, step_count, episode)
+            if self._timed:
+                step_count, epi_reward = stop_time("Time", self._run_episode, step_count, episode)
+            else:
+                step_count, epi_reward = self._run_episode(step_count, episode)
 
-            if episode % 1 == 0:
+            if episode % 100 == 0:
                 print("Episode: {} -- Reward: {} -- Average: {}".format(episode, epi_reward, self._average_reward()))
 
             if self._average_reward() > self._reward_to_reach:

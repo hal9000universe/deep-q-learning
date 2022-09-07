@@ -12,31 +12,32 @@ from numpy import ndarray
 # lib
 from Base.q_agent import Agent
 from Base.utils import generate_loading, generate_visualization
-from Breakout.env import create_env
-from Breakout.dddqn import Model
+from CartPole.env import ObsWrapper
+from CartPole.dqn import Model
 
 
 if __name__ == '__main__':
-    BATCH_SIZE: int = 32
-    BUFFER_SIZE: int = 100000
-    MAX_STEPS: int = 10000
+    BATCH_SIZE: int = 128
+    BUFFER_SIZE: int = 10000
+    MAX_STEPS: int = 500
     MAX_EPISODES: int = 10000
-    REPLACE_FREQUENCY: int = 50
-    BACKUP_FREQUENCY: int = 20
+    REPLACE_FREQUENCY: int = 10
+    BACKUP_FREQUENCY: int = 1000
     TRAINING_START: int = 256
-    TRAIN_FREQUENCY: int = 4
+    TRAIN_FREQUENCY: int = 1
     EPSILON: float = 1.0
-    EPSILON_DECAY_RATE: float = 0.995
-    MIN_EPSILON: float = 0.001
-    GAMMA: float = 0.999
-    LEARNING_RATE: float = 0.001
-    REWARD_TO_REACH: float = 100.
-    DIR: str = "breakout"
+    EPSILON_DECAY_RATE: float = 0.99
+    MIN_EPSILON: float = 0.2
+    GAMMA: float = 0.8
+    LEARNING_RATE: float = 0.1
+    REWARD_TO_REACH: float = 450.
+    DIR: str = "cart_pole"
 
-    env: gym.Env = create_env()
+    env: gym.Env = ObsWrapper(gym.make('CartPole-v1'))
+    env.seed(100)
+    obs_shape: Tuple = (BUFFER_SIZE, 4)
+    ac_shape: Tuple = (BUFFER_SIZE,)
     NUM_ACTIONS: int = env.action_space.n
-    OBS_SHAPE: Tuple = (BUFFER_SIZE, 4, 210, 160)
-    AC_SHAPE: Tuple = (BUFFER_SIZE,)
 
     rng: jax.random.PRNGKeyArray = jax.random.PRNGKey(time.time_ns())
     test_input: ndarray = env.reset()
@@ -54,8 +55,8 @@ if __name__ == '__main__':
         opt_state=optimizer_state,
         env=env,
         buffer_size=BUFFER_SIZE,
-        obs_shape=OBS_SHAPE,
-        ac_shape=AC_SHAPE,
+        obs_shape=obs_shape,
+        ac_shape=ac_shape,
         gamma=GAMMA,
         epsilon=EPSILON,
         epsilon_decay_rate=EPSILON_DECAY_RATE,
@@ -70,6 +71,7 @@ if __name__ == '__main__':
         reward_to_reach=REWARD_TO_REACH,
         num_actions=NUM_ACTIONS,
         saving_directory=DIR,
+        timed=False,
     )
     agent.training()
 
@@ -77,4 +79,5 @@ if __name__ == '__main__':
     visualize: Callable = generate_visualization(env, model)
 
     parameters = load_state()
-    visualize(parameters)
+    for _ in range(10):
+        visualize(parameters)

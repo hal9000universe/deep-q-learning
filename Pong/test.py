@@ -68,6 +68,7 @@ if __name__ == '__main__':
         back_up_frequency=BACKUP_FREQUENCY,
         replace_frequency=REPLACE_FREQUENCY,
         reward_to_reach=REWARD_TO_REACH,
+        num_actions=NUM_ACTIONS,
         saving_directory=DIR,
     )
     agent.training()

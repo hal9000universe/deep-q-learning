@@ -30,7 +30,7 @@ if __name__ == '__main__':
     MIN_EPSILON: float = 0.001
     GAMMA: float = 0.999
     LEARNING_RATE: float = 0.001
-    REWARD_TO_REACH: float = 240.
+    REWARD_TO_REACH: float = 280.
     DIR: str = "lunar_lander"
 
     env: gym.Env = ObsWrapper(gym.make('LunarLander-v2'), MAX_STEPS)
@@ -68,6 +68,7 @@ if __name__ == '__main__':
         back_up_frequency=BACKUP_FREQUENCY,
         replace_frequency=REPLACE_FREQUENCY,
         reward_to_reach=REWARD_TO_REACH,
+        num_actions=NUM_ACTIONS,
         saving_directory=DIR,
     )
     agent.training()
