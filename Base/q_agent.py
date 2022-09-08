@@ -117,7 +117,7 @@ class Agent:
         if self._epsilon < uniform(0, 1):
             return int(self._compute_action(self._params, state))
         else:
-            return randint(0, self._num_actions - 1)
+            return randint(0, self._num_actions)
 
     async def _update_target_model(self):
         self._target_params = self._params
