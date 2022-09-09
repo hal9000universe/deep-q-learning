@@ -1,7 +1,8 @@
 # py
-from typing import Tuple, List, Dict
+from typing import Tuple, List, Dict, Callable
 
 # nn & rl
+import jax
 import optax
 import haiku as hk
 import jax.numpy as jnp
@@ -9,11 +10,16 @@ from numpy import ndarray, average, array, std
 from numpy.linalg import norm
 
 
-def forward_analysis(network: hk.Transformed, params: hk.Params, inp: ndarray) -> Tuple[ndarray, ndarray]:
-    pred, features = network.apply(params, inp, True)
-    return pred, features
+def generate_forward_analysis(network: hk.Transformed) -> Callable:
+    @jax.jit
+    def forward_analysis(params: hk.Params, inp: ndarray) -> Tuple[ndarray, ndarray]:
+        pred, features = network.apply(params, inp, True)
+        return pred, features
+
+    return forward_analysis
 
 
+@jax.jit
 def loss_metric(y_pred: ndarray, y_true: ndarray) -> ndarray:
     loss: ndarray = jnp.mean(optax.huber_loss(y_pred, y_true))
     return loss

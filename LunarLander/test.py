@@ -1,6 +1,6 @@
 # py
 import time
-from typing import Callable, Tuple
+from typing import Callable, Tuple, Mapping
 from warnings import simplefilter
 
 # nn & rl
@@ -21,24 +21,23 @@ if __name__ == '__main__':
     simplefilter(action='ignore', category=FutureWarning)
 
     BATCH_SIZE: int = 32
-    BUFFER_SIZE: int = 100000
-    MAX_STEPS: int = 2000
+    BUFFER_SIZE: int = 40000
+    MAX_STEPS: int = 1500
     MAX_EPISODES: int = 10000
-    REPLACE_FREQUENCY: int = 50
+    REPLACE_FREQUENCY: int = 40
     BACKUP_FREQUENCY: int = 50
-    TRAINING_START: int = 256
+    TRAINING_START: int = 500
     TRAIN_FREQUENCY: int = 4
     EPSILON: float = 1.0
     EPSILON_DECAY_RATE: float = 0.995
-    MIN_EPSILON: float = 0.075
+    MIN_EPSILON: float = 0.1
     GAMMA: float = 0.995
-    LEARNING_RATE: float = 0.001
-    TPT_REWARD: float = 200.0
+    LEARNING_RATE: float = 0.0001
+    TPT_REWARD: float = 220.0
     REWARD_TO_REACH: float = 240.0
     DIR: str = "lunar_lander"
 
     env: gym.Env = ObsWrapper(gym.make('LunarLander-v2'), MAX_STEPS)
-    env.seed(0)
     obs_shape: Tuple = (BUFFER_SIZE, 9)
     ac_shape: Tuple = (BUFFER_SIZE,)
     NUM_ACTIONS: int = env.action_space.n
@@ -49,11 +48,8 @@ if __name__ == '__main__':
     model: hk.Transformed = hk.without_apply_rng(hk.transform(lambda *args: Model(NUM_ACTIONS)(*args)))
     optimizer: optax.adam = optax.adam(LEARNING_RATE)
 
-    load_state: Callable = generate_loading(DIR)
-    parameters, optimizer_state = load_state()
-
-    model.init(rng, test_input)
-    optimizer.init(parameters)
+    parameters: hk.Params = model.init(rng, test_input)
+    optimizer_state: Mapping = optimizer.init(parameters)
 
     agent = Agent(
         network=model,
@@ -81,7 +77,7 @@ if __name__ == '__main__':
         saving_directory=DIR,
         time_episodes=False,
         time_functions=False,
-        monitoring=False,
+        monitoring=True,
     )
     agent.training()
 

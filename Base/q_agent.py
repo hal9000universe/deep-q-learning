@@ -19,7 +19,7 @@ from sklearn.cluster import KMeans
 from Base.replay_buffer import ReplayBuffer, sample_batch
 from Base.q_learning_functions import action_computation, generate_q_target_comp, generate_train_step, preprocessing
 from Base.utils import generate_saving, stop_time
-from Base.metrics import forward_analysis, loss_metric, data_means, mean_eq_dist
+from Base.metrics import generate_forward_analysis, loss_metric, data_means, mean_eq_dist
 
 
 class Agent:
@@ -132,6 +132,7 @@ class Agent:
             self._episode_feature_data = {i: [] for i in range(num_actions)}
             self._feature_mean_vars = []
             self._tpt = False
+            self._forward_analysis = generate_forward_analysis(network)
 
     async def _update_epsilon(self):
         self._epsilon = max(self._epsilon * self._epsilon_decay_rate, self._min_epsilon)
@@ -232,7 +233,7 @@ class Agent:
                                                              states,
                                                              q_targets)
         if self._monitoring:
-            activations, features = forward_analysis(self._network, self._params, states)
+            activations, features = self._forward_analysis(self._params, states)
             loss: ndarray = loss_metric(activations, q_targets)
             self._episode_losses.append(loss)
             if self._tpt:
