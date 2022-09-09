@@ -1,6 +1,6 @@
 # py
 import os
-from typing import Callable, Any
+from typing import Callable, Any, Mapping, Tuple
 from time import time
 from pickle import dump, load
 
@@ -19,20 +19,23 @@ def stop_time(name: str, fun: Callable, *args) -> Any:
 
 
 def generate_saving(directory: str) -> Callable:
-    async def save_state(params: hk.Params):
+    async def save_state(params: hk.Params, opt_state: Mapping):
         if not os.path.exists(directory):
             os.mkdir(directory)
         with open(os.path.join(directory, "params.pickle"), "wb") as file:
             dump(params, file)
-
+        with open(os.path.join(directory, "opt_state.pickle"), "wb") as file:
+            dump(opt_state, file)
     return save_state
 
 
 def generate_loading(directory: str) -> Callable:
-    def load_state() -> hk.Params:
+    def load_state() -> Tuple[hk.Params, Mapping]:
         with open(os.path.join(directory, "params.pickle"), "rb") as file:
             params: hk.Params = load(file)
-        return params
+        with open(os.path.join(directory, "opt_state.pickle"), "rb") as file:
+            opt_state: Mapping = load(file)
+        return params, opt_state
 
     return load_state
 

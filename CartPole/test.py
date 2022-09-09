@@ -18,19 +18,20 @@ from CartPole.dqn import Model
 
 if __name__ == '__main__':
     BATCH_SIZE: int = 64
-    BUFFER_SIZE: int = 100000
+    BUFFER_SIZE: int = 1000000
     MAX_STEPS: int = 500
-    MAX_EPISODES: int = 1000000
+    MAX_EPISODES: int = 1000
     REPLACE_FREQUENCY: int = 10
-    BACKUP_FREQUENCY: int = 1000
-    TRAINING_START: int = 100
+    BACKUP_FREQUENCY: int = 100
+    TRAINING_START: int = 0
     TRAIN_FREQUENCY: int = 1
     EPSILON: float = 1.0
-    EPSILON_DECAY_RATE: float = 0.99
-    MIN_EPSILON: float = 0.2
-    GAMMA: float = 0.8
-    LEARNING_RATE: float = 0.3
-    REWARD_TO_REACH: float = 450.
+    EPSILON_DECAY_RATE: float = 0.995
+    MIN_EPSILON: float = 0.1
+    GAMMA: float = 0.9
+    LEARNING_RATE: float = 0.05
+    REWARD_TO_REACH: float = 475.
+    TPT_REWARD: float = 450.
     DIR: str = "cart_pole"
 
     env: gym.Env = ObsWrapper(gym.make('CartPole-v1'))
@@ -69,9 +70,10 @@ if __name__ == '__main__':
         back_up_frequency=BACKUP_FREQUENCY,
         replace_frequency=REPLACE_FREQUENCY,
         reward_to_reach=REWARD_TO_REACH,
+        tpt_reward=TPT_REWARD,
         num_actions=NUM_ACTIONS,
         saving_directory=DIR,
-        timed=False,
+        time_functions=False,
     )
     agent.training()
 

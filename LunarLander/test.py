@@ -1,6 +1,7 @@
 # py
 import time
 from typing import Callable, Tuple
+from warnings import simplefilter
 
 # nn & rl
 import gym
@@ -17,23 +18,27 @@ from LunarLander.dddqn import Model
 
 
 if __name__ == '__main__':
+    simplefilter(action='ignore', category=FutureWarning)
+
     BATCH_SIZE: int = 32
-    BUFFER_SIZE: int = 1000000
+    BUFFER_SIZE: int = 100000
     MAX_STEPS: int = 2000
     MAX_EPISODES: int = 10000
-    REPLACE_FREQUENCY: int = 25
+    REPLACE_FREQUENCY: int = 50
     BACKUP_FREQUENCY: int = 50
     TRAINING_START: int = 256
     TRAIN_FREQUENCY: int = 4
     EPSILON: float = 1.0
     EPSILON_DECAY_RATE: float = 0.995
-    MIN_EPSILON: float = 0.01
-    GAMMA: float = 0.999
+    MIN_EPSILON: float = 0.075
+    GAMMA: float = 0.995
     LEARNING_RATE: float = 0.001
-    REWARD_TO_REACH: float = 240.
+    TPT_REWARD: float = 200.0
+    REWARD_TO_REACH: float = 240.0
     DIR: str = "lunar_lander"
 
     env: gym.Env = ObsWrapper(gym.make('LunarLander-v2'), MAX_STEPS)
+    env.seed(0)
     obs_shape: Tuple = (BUFFER_SIZE, 9)
     ac_shape: Tuple = (BUFFER_SIZE,)
     NUM_ACTIONS: int = env.action_space.n
@@ -44,8 +49,11 @@ if __name__ == '__main__':
     model: hk.Transformed = hk.without_apply_rng(hk.transform(lambda *args: Model(NUM_ACTIONS)(*args)))
     optimizer: optax.adam = optax.adam(LEARNING_RATE)
 
-    parameters: hk.Params = model.init(rng, test_input)
-    optimizer_state = optimizer.init(parameters)
+    load_state: Callable = generate_loading(DIR)
+    parameters, optimizer_state = load_state()
+
+    model.init(rng, test_input)
+    optimizer.init(parameters)
 
     agent = Agent(
         network=model,
@@ -67,16 +75,19 @@ if __name__ == '__main__':
         train_frequency=TRAIN_FREQUENCY,
         back_up_frequency=BACKUP_FREQUENCY,
         replace_frequency=REPLACE_FREQUENCY,
+        tpt_reward=TPT_REWARD,
         reward_to_reach=REWARD_TO_REACH,
         num_actions=NUM_ACTIONS,
         saving_directory=DIR,
-        timed=False,
+        time_episodes=False,
+        time_functions=False,
+        monitoring=False,
     )
     agent.training()
 
     load_state: Callable = generate_loading(DIR)
     visualize: Callable = generate_visualization(env, model)
 
-    parameters = load_state()
+    parameters, optimizer_state = load_state()
     for _ in range(10):
         visualize(parameters)

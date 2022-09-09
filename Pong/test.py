@@ -31,6 +31,7 @@ if __name__ == '__main__':
     GAMMA: float = 0.999
     LEARNING_RATE: float = 0.00025
     REWARD_TO_REACH: float = 100.
+    TPT_REWARD: float = 90.
     DIR: str = "pong"
 
     env: gym.Env = create_env()
@@ -68,9 +69,10 @@ if __name__ == '__main__':
         back_up_frequency=BACKUP_FREQUENCY,
         replace_frequency=REPLACE_FREQUENCY,
         reward_to_reach=REWARD_TO_REACH,
+        tpt_reward=TPT_REWARD,
         num_actions=NUM_ACTIONS,
         saving_directory=DIR,
-        timed=False,
+        time_functions=False,
     )
     agent.training()
 
