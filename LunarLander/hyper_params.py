@@ -73,3 +73,15 @@ if __name__ == '__main__':
     )
     params = optimize(agent)
     print(params)
+
+
+# hyper-params found: {
+# 'target': -0.5397008039787093,
+# 'params': {'batch_size': 38.0,
+#           'epsilon': 0.7083715136321693,
+#           'epsilon_decay_rate': 0.9602451480876931,
+#           'gamma': 0.9340376252278284,
+#           'min_epsilon': 0.06176775796146821,
+#           'replace_frequency': 64.0,
+#           'train_frequency': 7.0}
+# }

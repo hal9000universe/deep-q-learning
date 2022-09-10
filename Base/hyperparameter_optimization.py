@@ -97,7 +97,7 @@ class ParamAgent(Agent):
         self._train_frequency = train_frequency
 
 
-def generate_util_func(agent: ParamAgent, episodes: int = 100) -> Callable:
+def generate_util_func(agent: ParamAgent, episodes) -> Callable:
     agent.max_episodes = episodes
 
     def util_func(gamma: float,
@@ -116,12 +116,12 @@ def generate_util_func(agent: ParamAgent, episodes: int = 100) -> Callable:
     return util_func
 
 
-def optimize(agent: ParamAgent, episodes: int = 500, runs: int = 100) -> Dict:
+def optimize(agent: ParamAgent, episodes: int = 200, runs: int = 100) -> Dict:
     black_box_func: Callable = generate_util_func(agent, episodes)
     bounds: Dict = {
         "gamma": [0.8, 0.999],
         "epsilon": [0.3, 1.],
-        "epsilon_decay_rate": [0.8, 0.999],
+        "epsilon_decay_rate": [0.9, 0.999],
         "min_epsilon": [0.001, 0.3],
         "replace_frequency": [5, 100],
         "batch_size": [16, 128],
@@ -133,7 +133,10 @@ def optimize(agent: ParamAgent, episodes: int = 500, runs: int = 100) -> Dict:
         next_point = optimizer.suggest(util_func)
         next_point["replace_frequency"] = int(next_point["replace_frequency"])
         next_point["batch_size"] = int(next_point["batch_size"])
-        next_point["train_frequency"] = int(next_point["replace_frequency"])
+        next_point["train_frequency"] = int(next_point["train_frequency"])
         target = black_box_func(**next_point)
         optimizer.register(next_point, target)
+        print("Run: {}".format(run))
+        print("params: {} \n target: {}".format(next_point, target))
+        print("-----")
     return optimizer.max
