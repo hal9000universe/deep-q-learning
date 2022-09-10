@@ -63,6 +63,7 @@ class Agent:
     _saving_directory: str
     _time_functions: bool
     _monitoring: bool
+    _verbose: int
 
     def __init__(self,
                  network: hk.Transformed,
@@ -91,6 +92,7 @@ class Agent:
                  time_episodes: bool = False,
                  time_functions: bool = False,
                  monitoring: bool = False,
+                 verbose: int = 1,
                  ):
         self._network = network
         self._params = params
@@ -124,6 +126,7 @@ class Agent:
         self._time_episodes = time_episodes
         self._time_functions = time_functions
         self._monitoring = monitoring
+        self._verbose = verbose
         if self._monitoring:
             self._loss_history = []
             self._episode_losses = []
@@ -300,7 +303,7 @@ class Agent:
             else:
                 step_count = self._run_episode(step_count, episode)
 
-            if episode % 1 == 0:
+            if episode % 50 == 0 and self._verbose:
                 print("Episode: {} -- Reward: {} -- Average: {}".format(episode,
                                                                         self._reward_history[-1],
                                                                         self._average_reward()))
@@ -315,6 +318,15 @@ class Agent:
                 asyncio.run(self._save_state(self._params, self._opt_state))
                 self._plot()
                 return
+
+    def evaluate(self) -> float:
+        evaluation_runs: int = 10
+        for run in range(evaluation_runs):
+            state = self._env.reset()
+            for step in range(self._max_steps):
+                action = int(self._compute_action(self._params, state))
+                state, reward, done, info = self._env.step(action)
+        return self._average_reward()
 
     def _plot(self):
         loss_fig: plt.Figure = plt.figure()
