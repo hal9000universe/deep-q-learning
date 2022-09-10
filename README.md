@@ -7,6 +7,6 @@ and apply them to different environments.
 # TODO
 - stabilize learning process
 - test neural-collapse enforcing on mnist and cifar
-- implement hyperparameter optimization
+- implement randomized search
 - fix prioritized experience replay (+testing)
 - learn CartPole, Pong, Breakout
