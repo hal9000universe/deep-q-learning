@@ -95,5 +95,7 @@ def sample_batch(num_samples: int,
     reward_samples: ndarray = take_along_axis(rewards, indices, 0)
     observation_samples: ndarray = take_along_axis(observations, expanded_indices, 0)
     done_samples: ndarray = take_along_axis(dones, indices, 0)
-    importance_sampling_weights: ndarray = power(num_samples * priority_samples, alpha) / np.max(priority_samples)
+    importance_sampling_weights: ndarray = power(num_samples * priority_samples, alpha)
+    if np.max(priority_samples) != 0:
+        importance_sampling_weights /= np.max(priority_samples)
     return state_samples, action_samples, reward_samples, observation_samples, done_samples, importance_sampling_weights
