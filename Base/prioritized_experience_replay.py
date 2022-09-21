@@ -31,7 +31,7 @@ class PrioritizedExperienceReplay(ReplayBuffer):
                  ac_shape: Tuple,
                  alpha: float,
                  beta: float,
-                 min_priority: float,
+                 min_priority: float = 0.01,
                  ):
         super(PrioritizedExperienceReplay, self).__init__(buffer_size, obs_shape, ac_shape)
         self._tree = gen_tree(buffer_size)

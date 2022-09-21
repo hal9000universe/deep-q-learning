@@ -275,7 +275,7 @@ class Agent:
             asyncio.run(self._update_target_model())
 
         if episode % self._back_up_frequency == 0:
-            self._save_state(self._params, self._opt_state)
+            asyncio.run(self._save_state(self._params, self._opt_state))
 
         if self._monitoring and self._training_start < step_count:
             episode_loss: float = sum(self._episode_losses)
@@ -309,13 +309,13 @@ class Agent:
                                                                         self._average_reward()))
 
             if self._average_reward() > self._tpt_reward:
-                self._save_state(self._params, self._opt_state)
+                asyncio.run(self._save_state(self._params, self._opt_state))
                 self._tpt = True
                 self._epsilon = 0.
                 self._min_epsilon = 0.
 
             if self._average_reward() > self._reward_to_reach:
-                self._save_state(self._params, self._opt_state)
+                asyncio.run(self._save_state(self._params, self._opt_state))
                 self._plot()
                 return
 

@@ -176,7 +176,7 @@ class DQN_replay(DQN):
             rewards = torch.Tensor(rewards)
             is_dones_tensor = torch.Tensor(is_dones)
 
-            is_dones_indices = torch.where(is_dones_tensor == True)[0]
+            is_dones_indices = torch.where(is_dones_tensor)[0]
 
             all_q_values = self.model(states)  # predicted q_values of all states
             all_q_values_next = self.model(next_states)
@@ -232,3 +232,9 @@ if __name__ == '__main__':
     double = q_learning(env, dqn_double, episodes, gamma=.9,
                         epsilon=0.2, replay=True, double=True,
                         title='Double DQL with Replay', n_update=10)
+    state = env.reset()
+    done = False
+    while not done:
+        action = int(torch.argmax(dqn_double.predict(state)))
+        state, reward, done, info = env.step(action)
+        env.render()
