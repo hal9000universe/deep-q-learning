@@ -28,8 +28,9 @@ def update(tree: ndarray, node: int, new_value: float):
 def retrieve(tree: ndarray, value):
     i = 1
     size = int(tree.size / 2)
-    while i + 1 < size:
+    while 2 * i + 1 < tree.size:
         if tree[2 * i] >= value or tree[2 * i + 1] == 0:
+            value = min(value, tree[2 * i])
             i = 2 * i
         else:
             value -= tree[2 * i]
