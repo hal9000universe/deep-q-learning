@@ -23,6 +23,7 @@ class PERAgent:
     _optimizer: optax.adam
     _opt_state: Mapping
     _env: gym.Env
+    _num_actions: int
     # hyperparameters
     _gamma: float
     _epsilon: float
@@ -76,6 +77,7 @@ class PERAgent:
         self._opt_state = opt_state
         self._target_params = params
         self._env = env
+        self._num_actions = env.action_space.n
         self._per = PrioritizedExperienceReplay(buffer_size=buffer_size,
                                                 obs_shape=obs_placeholder_shape,
                                                 ac_shape=ac_placeholder_shape,
@@ -116,7 +118,7 @@ class PERAgent:
         if self._epsilon < uniform(0, 1):
             return int(self._compute_action(self._params, state))
         else:
-            return randint(0, 4)
+            return randint(0, self._num_actions)
 
     async def _update_target_model(self):
         self._target_params = self._params

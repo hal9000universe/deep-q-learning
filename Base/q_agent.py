@@ -155,21 +155,6 @@ class Agent:
     async def _update_target_model(self):
         self._target_params = self._params
 
-    def _tpt_analysis(self,
-                      actions: jaxlib.xla_extension.DeviceArray,
-                      activations: jaxlib.xla_extension.DeviceArray,
-                      features: jaxlib.xla_extension.DeviceArray):
-        actions: ndarray = asarray(actions, dtype=float32)
-        activations: ndarray = asarray(activations, dtype=float32)
-        features: ndarray = asarray(features, dtype=float32)
-        for index, action in enumerate(actions):
-            self._episode_class_data[action].append(activations[index])
-        k_means = KMeans(self._num_actions)
-        k_means.fit(features)
-        labels = k_means.predict(features)
-        for index, label in enumerate(labels):
-            self._episode_feature_data[label].append(features[index])
-
     def _step(self):
         if self._time_functions:
             states, actions, rewards, observations, dones = stop_time("Sampling",
