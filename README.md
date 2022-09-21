@@ -5,9 +5,5 @@ with various reinforcement learning algorithms
 and apply them to different environments.
 
 # TODO
-- stabilize learning process
-- implement regularization
-- test neural-collapse enforcing on mnist and cifar
-- implement randomized search
 - fix prioritized experience replay (+testing)
 - learn CartPole, Pong, Breakout

@@ -48,11 +48,17 @@ class Agent:
     _loss_history: List[float]
     _episode_losses: List[ndarray]
     _reward_history: List[float]
+    _episode_class_data: Dict[int, List[ndarray]]
+    _class_mean_vars: List[ndarray]
+    _episode_feature_data: Dict[int, List[ndarray]]
+    _feature_mean_vars: List[ndarray]
+    _tpt: bool
     # functions
     _compute_action: Callable
     _compute_q_targets: Callable
     _train_step: Callable
     _save_state: Callable
+    _forward_analysis: Callable
     # ui
     _saving_directory: str
     _time_functions: bool
@@ -79,6 +85,7 @@ class Agent:
                  train_frequency: int,
                  back_up_frequency: int,
                  replace_frequency: int,
+                 tpt_reward: float,
                  reward_to_reach: float,
                  num_actions: int,
                  saving_directory: str,
@@ -107,6 +114,7 @@ class Agent:
         self._train_frequency = train_frequency
         self._back_up_frequency = back_up_frequency
         self._replace_frequency = replace_frequency
+        self._tpt_reward = tpt_reward
         self._reward_to_reach = reward_to_reach
         self._num_actions = num_actions
         self._reward_history = []
@@ -122,6 +130,12 @@ class Agent:
         if self._monitoring:
             self._loss_history = []
             self._episode_losses = []
+            self._episode_class_data = {i: [] for i in range(num_actions)}
+            self._class_mean_vars = []
+            self._episode_feature_data = {i: [] for i in range(num_actions)}
+            self._feature_mean_vars = []
+            self._tpt = False
+            self._forward_analysis = generate_forward_analysis(network)
 
     async def _update_epsilon(self):
         self._epsilon = max(self._epsilon * self._epsilon_decay_rate, self._min_epsilon)
@@ -148,6 +162,21 @@ class Agent:
 
     async def _update_target_model(self):
         self._target_params = self._params
+
+    def _tpt_analysis(self,
+                      actions: jaxlib.xla_extension.DeviceArray,
+                      activations: jaxlib.xla_extension.DeviceArray,
+                      features: jaxlib.xla_extension.DeviceArray):
+        actions: ndarray = asarray(actions, dtype=float32)
+        activations: ndarray = asarray(activations, dtype=float32)
+        features: ndarray = asarray(features, dtype=float32)
+        for index, action in enumerate(actions):
+            self._episode_class_data[action].append(activations[index])
+        k_means = KMeans(self._num_actions)
+        k_means.fit(features)
+        labels = k_means.predict(features)
+        for index, label in enumerate(labels):
+            self._episode_feature_data[label].append(features[index])
 
     def _step(self):
         if self._time_functions:
@@ -210,11 +239,21 @@ class Agent:
             activations, features = self._forward_analysis(self._params, states)
             loss: ndarray = loss_metric(activations, q_targets)
             self._episode_losses.append(loss)
+            if self._tpt:
+                self._tpt_analysis(actions, activations, features)
+
+    def _reset(self):
+        if self._monitoring and self._tpt:
+            for index, cls in self._episode_class_data.items():
+                self._episode_class_data[index] = cls[-101:-1]
+            for index, ftr in self._episode_feature_data.items():
+                self._episode_feature_data[index] = ftr[-101:-1]
 
     def _run_episode(self, step_count: int, episode: int):
+        self._reset()
         epi_reward: float = 0.
         state: ndarray = self._env.reset()
-        for step in range(1, self._max_steps + 1):
+        for step in range(1, self._max_episodes + 1):
             step_count += 1
             action: int = self._policy(state)
             observation, reward, done, info = self._env.step(action)
@@ -241,6 +280,13 @@ class Agent:
         if self._monitoring and self._training_start < step_count:
             episode_loss: float = sum(self._episode_losses)
             self._loss_history.append(episode_loss)
+            if self._tpt and step_count % self._train_frequency == 0:
+                cls_means = data_means(self._episode_class_data)
+                cls_eq_dist, cls_mean_var = mean_eq_dist(cls_means, 1)
+                ftr_means = data_means(self._episode_feature_data)
+                ftr_eq_dist, ftr_mean_var = mean_eq_dist(ftr_means, 0)
+                self._class_mean_vars.append(cls_mean_var)
+                self._feature_mean_vars.append(ftr_mean_var)
 
         asyncio.run(self._update_epsilon())
         asyncio.run(self._update_reward_history(epi_reward))
@@ -262,6 +308,12 @@ class Agent:
                                                                         self._reward_history[-1],
                                                                         self._average_reward()))
 
+            if self._average_reward() > self._tpt_reward:
+                asyncio.run(self._save_state(self._params, self._opt_state))
+                self._tpt = True
+                self._epsilon = 0.
+                self._min_epsilon = 0.
+
             if self._average_reward() > self._reward_to_reach:
                 asyncio.run(self._save_state(self._params, self._opt_state))
                 self._plot()
@@ -277,16 +329,31 @@ class Agent:
         return self._average_reward()
 
     def _plot(self):
-        reward_fig: plt.Figure = plt.figure()
-        x_r = [i for i in range(len(self._reward_history))]
-        plt.plot(x_r, self._reward_history)
+        loss_fig: plt.Figure = plt.figure()
+        x_l = [i for i in range(len(self._loss_history))]
+        plt.plot(x_l, self._loss_history)
         plt.xlabel("Episodes")
-        plt.ylabel("Reward")
-        reward_fig.show()
+        plt.ylabel("Loss")
+        loss_fig.show()
+        # loss_fig.savefig(open(os.path.join("/", self._saving_directory, "/loss.png"), "wb"), dpi=250)
         if self._monitoring:
-            loss_fig: plt.Figure = plt.figure()
-            x_l = [i for i in range(len(self._loss_history))]
-            plt.plot(x_l, self._loss_history)
+            reward_fig: plt.Figure = plt.figure()
+            x_r = [i for i in range(len(self._reward_history))]
+            plt.plot(x_r, self._reward_history)
             plt.xlabel("Episodes")
-            plt.ylabel("Loss")
-            loss_fig.show()
+            plt.ylabel("Reward")
+            reward_fig.show()
+            # reward_fig.savefig(open(os.path.join("/", self._saving_directory, "/reward.png"), "wb"), dpi=250)
+            x_v = [i for i in range(len(self._class_mean_vars))]
+            cls_vars_fig: plt.Figure = plt.figure()
+            plt.plot(x_v, self._class_mean_vars)
+            plt.xlabel("Episodes")
+            plt.ylabel("Class Mean Variance")
+            cls_vars_fig.show()
+            # cls_vars_fig.savefig(open(os.path.join(self._saving_directory, "/class_mean_variance.png"), "wb"), dpi=250)
+            ftr_vars_fig: plt.Figure = plt.figure()
+            plt.plot(x_v, self._feature_mean_vars)
+            plt.xlabel("Episodes")
+            plt.ylabel("Feature Mean Variance")
+            ftr_vars_fig.show()
+            # ftr_vars_fig.savefig(open(os.path.join(self._saving_directory, "/feature_mean_variance.png"), "wb"), dpi=250)

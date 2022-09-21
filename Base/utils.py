@@ -19,7 +19,7 @@ def stop_time(name: str, fun: Callable, *args) -> Any:
 
 
 def generate_saving(directory: str) -> Callable:
-    async def save_state(params: hk.Params, opt_state: Mapping):
+    def save_state(params: hk.Params, opt_state: Mapping):
         if not os.path.exists(directory):
             os.mkdir(directory)
         with open(os.path.join(directory, "params.pickle"), "wb") as file:
@@ -45,7 +45,7 @@ def generate_visualization(environment: gym.Env, network: hk.Transformed) -> Cal
         state: ndarray = environment.reset()
         done: bool = False
         while not done:
-            action: int = int(argmax(network.apply(params, state)))
+            action: int = int(argmax(network.apply(params[0], state)))
             state, reward, done, info = environment.step(action)
             environment.render()
 
