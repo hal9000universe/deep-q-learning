@@ -164,6 +164,7 @@ class PERAgent:
                                                                                    rewards,
                                                                                    observations,
                                                                                    dones)
+                    priorities = abs(priorities)
                     self._update_priorities(indices, priorities)
                     self._params, self._opt_state = self._train_step(self._params,
                                                                      self._opt_state,
@@ -178,13 +179,13 @@ class PERAgent:
                 asyncio.run(self._update_target_model())
 
             if episode % self._back_up_frequency == 0:
-                asyncio.run(self._save_state(self._params))
+                self._save_state(self._params, self._opt_state)
 
             asyncio.run(self._update_epsilon())
             asyncio.run(self._update_episode_rewards(epi_reward))
 
             if self._average_reward() > self._reward_to_reach:
-                asyncio.run(self._save_state(self._params))
+                self._save_state(self._params, self._opt_state)
                 return
 
             end: float = time.time()
