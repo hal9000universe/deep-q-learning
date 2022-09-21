@@ -176,7 +176,7 @@ class PERAgent:
                     break
 
             if episode % self._replace_frequency == 0:
-                asyncio.run(self._update_target_model())
+                self._update_target_model()
 
             if episode % self._back_up_frequency == 0:
                 self._save_state(self._params, self._opt_state)

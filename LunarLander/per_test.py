@@ -21,10 +21,10 @@ if __name__ == '__main__':
     EPSILON_DECAY_RATE: float = 0.995
     MIN_EPSILON: float = 0.001
     GAMMA: float = 0.999
-    LEARNING_RATE: float = 0.001
-    ALPHA: float = 0.4
-    BETA: float = 0.6
-    MIN_PRIORITY: float = 0.01
+    LEARNING_RATE: float = 0.1  # 0.1
+    ALPHA: float = 1.  # 1.
+    BETA: float = 1.  # 1.
+    MIN_PRIORITY: float = 0.1  # 0.1
     REWARD_TO_REACH: float = 240.
     DIR: str = "lunar_lander"
 

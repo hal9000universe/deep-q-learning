@@ -85,7 +85,6 @@ class Agent:
                  train_frequency: int,
                  back_up_frequency: int,
                  replace_frequency: int,
-                 tpt_reward: float,
                  reward_to_reach: float,
                  num_actions: int,
                  saving_directory: str,
@@ -114,7 +113,6 @@ class Agent:
         self._train_frequency = train_frequency
         self._back_up_frequency = back_up_frequency
         self._replace_frequency = replace_frequency
-        self._tpt_reward = tpt_reward
         self._reward_to_reach = reward_to_reach
         self._num_actions = num_actions
         self._reward_history = []
@@ -130,12 +128,6 @@ class Agent:
         if self._monitoring:
             self._loss_history = []
             self._episode_losses = []
-            self._episode_class_data = {i: [] for i in range(num_actions)}
-            self._class_mean_vars = []
-            self._episode_feature_data = {i: [] for i in range(num_actions)}
-            self._feature_mean_vars = []
-            self._tpt = False
-            self._forward_analysis = generate_forward_analysis(network)
 
     async def _update_epsilon(self):
         self._epsilon = max(self._epsilon * self._epsilon_decay_rate, self._min_epsilon)
@@ -275,7 +267,7 @@ class Agent:
             asyncio.run(self._update_target_model())
 
         if episode % self._back_up_frequency == 0:
-            asyncio.run(self._save_state(self._params, self._opt_state))
+            self._save_state(self._params, self._opt_state)
 
         if self._monitoring and self._training_start < step_count:
             episode_loss: float = sum(self._episode_losses)
@@ -307,12 +299,6 @@ class Agent:
                 print("Episode: {} -- Reward: {} -- Average: {}".format(episode,
                                                                         self._reward_history[-1],
                                                                         self._average_reward()))
-
-            if self._average_reward() > self._tpt_reward:
-                asyncio.run(self._save_state(self._params, self._opt_state))
-                self._tpt = True
-                self._epsilon = 0.
-                self._min_epsilon = 0.
 
             if self._average_reward() > self._reward_to_reach:
                 asyncio.run(self._save_state(self._params, self._opt_state))
