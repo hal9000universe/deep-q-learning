@@ -116,16 +116,16 @@ def generate_util_func(agent: ParamAgent, episodes) -> Callable:
     return util_func
 
 
-def optimize(agent: ParamAgent, episodes: int = 200, runs: int = 100) -> Dict:
+def optimize(agent: ParamAgent, episodes: int = 500, runs: int = 20) -> Dict:
     black_box_func: Callable = generate_util_func(agent, episodes)
     bounds: Dict = {
-        "gamma": [0.8, 0.999],
-        "epsilon": [0.3, 1.],
+        "gamma": [0.9, 0.999],
+        "epsilon": [0.6, 1.],
         "epsilon_decay_rate": [0.9, 0.999],
-        "min_epsilon": [0.001, 0.3],
-        "replace_frequency": [5, 100],
-        "batch_size": [16, 128],
-        "train_frequency": [1, 20]
+        "min_epsilon": [0.001, 0.2],
+        "replace_frequency": [20, 70],
+        "batch_size": [38, 70],
+        "train_frequency": [2, 15]
     }
     optimizer = BayesianOptimization(black_box_func, pbounds=bounds, verbose=2, random_state=1000)
     util_func = UtilityFunction(kind="ucb", kappa=1.96, xi=0.01)

@@ -20,21 +20,20 @@ from LunarLander.dddqn import Model
 if __name__ == '__main__':
     simplefilter(action='ignore', category=FutureWarning)
 
-    BATCH_SIZE: int = 32
-    BUFFER_SIZE: int = 40000
+    BATCH_SIZE: int = 64
+    BUFFER_SIZE: int = 100000
     MAX_STEPS: int = 1500
     MAX_EPISODES: int = 10000
-    REPLACE_FREQUENCY: int = 40
+    REPLACE_FREQUENCY: int = 20
     BACKUP_FREQUENCY: int = 50
-    TRAINING_START: int = 500
+    TRAINING_START: int = 250
     TRAIN_FREQUENCY: int = 4
-    EPSILON: float = 1.0
-    EPSILON_DECAY_RATE: float = 0.995
-    MIN_EPSILON: float = 0.1
-    GAMMA: float = 0.995
-    LEARNING_RATE: float = 0.0001
-    TPT_REWARD: float = 220.0
-    REWARD_TO_REACH: float = 240.0
+    EPSILON: float = 1.
+    EPSILON_DECAY_RATE: float = 0.99
+    MIN_EPSILON: float = 0.15
+    GAMMA: float = 0.99
+    LEARNING_RATE: float = 0.0002
+    REWARD_TO_REACH: float = 230.0
     DIR: str = "lunar_lander"
 
     env: gym.Env = ObsWrapper(gym.make('LunarLander-v2'), MAX_STEPS)
@@ -46,9 +45,9 @@ if __name__ == '__main__':
     test_input: ndarray = env.reset()
 
     model: hk.Transformed = hk.without_apply_rng(hk.transform(lambda *args: Model(NUM_ACTIONS)(*args)))
-    optimizer: optax.adam = optax.adam(LEARNING_RATE)
+    optimizer: optax.GradientTransformation = optax.adamw(LEARNING_RATE)
 
-    parameters: hk.Params = model.init(rng, test_input)
+    parameters = model.init(rng, test_input)
     optimizer_state: Mapping = optimizer.init(parameters)
 
     agent = Agent(
@@ -71,13 +70,12 @@ if __name__ == '__main__':
         train_frequency=TRAIN_FREQUENCY,
         back_up_frequency=BACKUP_FREQUENCY,
         replace_frequency=REPLACE_FREQUENCY,
-        tpt_reward=TPT_REWARD,
         reward_to_reach=REWARD_TO_REACH,
         num_actions=NUM_ACTIONS,
         saving_directory=DIR,
         time_episodes=False,
         time_functions=False,
-        monitoring=True,
+        monitoring=False,
     )
     agent.training()
 

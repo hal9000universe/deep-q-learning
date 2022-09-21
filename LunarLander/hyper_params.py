@@ -19,18 +19,11 @@ from LunarLander.dddqn import Model
 if __name__ == '__main__':
     simplefilter(action='ignore', category=FutureWarning)
 
-    BATCH_SIZE: int = 32
     BUFFER_SIZE: int = 40000
     MAX_STEPS: int = 1500
     MAX_EPISODES: int = 10000
-    REPLACE_FREQUENCY: int = 40
     BACKUP_FREQUENCY: int = 50
     TRAINING_START: int = 500
-    TRAIN_FREQUENCY: int = 4
-    EPSILON: float = 1.0
-    EPSILON_DECAY_RATE: float = 0.995
-    MIN_EPSILON: float = 0.1
-    GAMMA: float = 0.995
     LEARNING_RATE: float = 0.0001
     TPT_REWARD: float = 220.0
     REWARD_TO_REACH: float = 240.0
@@ -76,12 +69,14 @@ if __name__ == '__main__':
 
 
 # hyper-params found: {
-# 'target': -0.5397008039787093,
-# 'params': {'batch_size': 38.0,
-#           'epsilon': 0.7083715136321693,
-#           'epsilon_decay_rate': 0.9602451480876931,
-#           'gamma': 0.9340376252278284,
-#           'min_epsilon': 0.06176775796146821,
-#           'replace_frequency': 64.0,
-#           'train_frequency': 7.0}
+# 'target': 34.15626960301665,
+# 'params': {
+#           'batch_size': 52.0,
+#           'epsilon': 0.9788955429046808,
+#           'epsilon_decay_rate': 0.987260835317783,
+#           'gamma': 0.9027521238925759,
+#           'min_epsilon': 0.14687556426669807,
+#           'replace_frequency': 25.0,
+#           'train_frequency': 7.0
+#           }
 # }
