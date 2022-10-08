@@ -55,7 +55,7 @@ class Transformer(hk.Module):
 
     def __init__(self,
                  num_layers: int,
-                 init_params: List,
+                 init_params: List[Tuple[Tuple, Tuple, float]],
                  num_actions: int
                  ):
         super(Transformer, self).__init__()

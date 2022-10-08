@@ -7,13 +7,11 @@ import matplotlib.pyplot as plt
 
 # nn & rl
 import gym
-import jaxlib
 import optax
 import haiku as hk
 import jax.numpy as jnp
-from numpy import ndarray, average, asarray, float32
+from numpy import ndarray, average
 from numpy.random import randint
-from sklearn.cluster import KMeans
 
 # lib
 from Base.replay_buffer import ReplayBuffer, sample_batch
