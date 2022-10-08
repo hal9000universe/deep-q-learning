@@ -11,7 +11,7 @@ import optax
 from numpy import ndarray
 
 # lib
-from Base.hyperparameter_optimization import ParamAgent, optimize
+from General.QLearning.hyperparameter_optimization import ParamAgent, optimize
 from LunarLander.env import ObsWrapper
 from LunarLander.dddqn import Model
 
@@ -56,7 +56,6 @@ if __name__ == '__main__':
         max_steps=MAX_STEPS,
         training_start=TRAINING_START,
         back_up_frequency=BACKUP_FREQUENCY,
-        tpt_reward=TPT_REWARD,
         reward_to_reach=REWARD_TO_REACH,
         num_actions=NUM_ACTIONS,
         saving_directory=DIR,

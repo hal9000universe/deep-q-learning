@@ -14,9 +14,9 @@ from numpy import ndarray, average
 from numpy.random import randint
 
 # lib
-from Base.replay_buffer import ReplayBuffer, sample_batch
-from Base.q_learning_functions import action_computation, generate_q_target_comp, generate_train_step, preprocessing
-from Base.utils import generate_saving, stop_time
+from General.Base.replay_buffer import ReplayBuffer, sample_batch
+from General.Base.utils import generate_saving, stop_time
+from General.QLearning.q_learning_functions import action_computation, generate_q_target_comp, generate_train_step, preprocessing
 
 
 class Agent:
@@ -55,11 +55,7 @@ class Agent:
     _compute_q_targets: Callable
     _train_step: Callable
     _save_state: Callable
-    _forward_analysis: Callable
     # ui
-    _saving_directory: str
-    _time_functions: bool
-    _monitoring: bool
     _verbose: int
 
     def __init__(self,
@@ -85,8 +81,6 @@ class Agent:
                  reward_to_reach: float,
                  num_actions: int,
                  saving_directory: str,
-                 time_episodes: bool = False,
-                 time_functions: bool = False,
                  monitoring: bool = False,
                  verbose: int = 1,
                  ):
@@ -117,9 +111,6 @@ class Agent:
         self._compute_q_targets = generate_q_target_comp(network, gamma, env)
         self._train_step = generate_train_step(optimizer, network)
         self._save_state = generate_saving(saving_directory)
-        self._saving_directory = saving_directory
-        self._time_episodes = time_episodes
-        self._time_functions = time_functions
         self._monitoring = monitoring
         self._verbose = verbose
         if self._monitoring:
@@ -218,10 +209,7 @@ class Agent:
     def training(self):
         step_count: int = 0
         for episode in range(self._max_episodes):
-            if self._time_episodes:
-                step_count = stop_time("Time", self._run_episode, step_count, episode)
-            else:
-                step_count = self._run_episode(step_count, episode)
+            step_count = self._run_episode(step_count, episode)
 
             if episode % 50 == 0 and self._verbose:
                 print("Episode: {} -- Reward: {} -- Average: {}".format(episode,

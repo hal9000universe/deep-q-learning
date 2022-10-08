@@ -8,7 +8,7 @@ import optax
 from bayes_opt import BayesianOptimization, UtilityFunction
 
 # lib
-from Base.q_agent import Agent
+from General.QLearning.q_agent import Agent
 
 
 class ParamAgent(Agent):
@@ -29,8 +29,6 @@ class ParamAgent(Agent):
                  reward_to_reach: float,
                  num_actions: int,
                  saving_directory: str,
-                 time_episodes: bool = False,
-                 time_functions: bool = False,
                  monitoring: bool = False,
                  gamma: float = 0.,
                  epsilon: float = 0.,
@@ -63,8 +61,6 @@ class ParamAgent(Agent):
             reward_to_reach,
             num_actions,
             saving_directory,
-            time_episodes,
-            time_functions,
             monitoring,
             verbose=0,
         )

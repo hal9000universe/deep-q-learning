@@ -11,8 +11,8 @@ import optax
 from numpy import ndarray
 
 # lib
-from Base.q_agent import Agent
-from Base.utils import generate_loading, generate_visualization
+from General.QLearning.q_agent import Agent
+from General.Base.utils import generate_loading, generate_visualization
 from LunarLander.env import ObsWrapper
 from LunarLander.dddqn import Model
 
@@ -73,8 +73,6 @@ if __name__ == '__main__':
         reward_to_reach=REWARD_TO_REACH,
         num_actions=NUM_ACTIONS,
         saving_directory=DIR,
-        time_episodes=False,
-        time_functions=False,
         monitoring=False,
     )
     agent.training()
