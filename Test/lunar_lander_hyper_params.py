@@ -59,8 +59,6 @@ if __name__ == '__main__':
         reward_to_reach=REWARD_TO_REACH,
         num_actions=NUM_ACTIONS,
         saving_directory=DIR,
-        time_episodes=False,
-        time_functions=False,
         monitoring=False,
     )
     params = optimize(agent)
