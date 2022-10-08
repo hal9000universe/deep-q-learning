@@ -19,7 +19,6 @@ from sklearn.cluster import KMeans
 from Base.replay_buffer import ReplayBuffer, sample_batch
 from Base.q_learning_functions import action_computation, generate_q_target_comp, generate_train_step, preprocessing
 from Base.utils import generate_saving, stop_time
-from Base.metrics import generate_forward_analysis, loss_metric, data_means, mean_eq_dist
 
 
 class Agent:
@@ -156,78 +155,31 @@ class Agent:
         self._target_params = self._params
 
     def _step(self):
-        if self._time_functions:
-            states, actions, rewards, observations, dones = stop_time("Sampling",
-                                                                      sample_batch,
-                                                                      self._replay_buffer.size,
-                                                                      self._replay_buffer.states,
-                                                                      self._replay_buffer.actions,
-                                                                      self._replay_buffer.rewards,
-                                                                      self._replay_buffer.observations,
-                                                                      self._replay_buffer.dones,
-                                                                      self._batch_size)
-            states, actions, rewards, observations, dones = stop_time("Preprocessing",
-                                                                      preprocessing,
-                                                                      states,
+        states, actions, rewards, observations, dones = sample_batch(self._replay_buffer.size,
+                                                                     self._replay_buffer.states,
+                                                                     self._replay_buffer.actions,
+                                                                     self._replay_buffer.rewards,
+                                                                     self._replay_buffer.observations,
+                                                                     self._replay_buffer.dones,
+                                                                     self._batch_size)
+        states, actions, rewards, observations, dones = preprocessing(states,
                                                                       actions,
                                                                       rewards,
                                                                       observations,
                                                                       dones)
-            q_targets: jnp.ndarray = stop_time("Q-target computation",
-                                               self._compute_q_targets,
-                                               self._params,
-                                               self._target_params,
-                                               states,
-                                               actions,
-                                               rewards,
-                                               observations,
-                                               dones)
-            self._params, self._opt_state = stop_time("Train step",
-                                                      self._train_step,
-                                                      self._params,
-                                                      self._opt_state,
-                                                      states,
-                                                      q_targets)
-        else:
-            states, actions, rewards, observations, dones = sample_batch(self._replay_buffer.size,
-                                                                         self._replay_buffer.states,
-                                                                         self._replay_buffer.actions,
-                                                                         self._replay_buffer.rewards,
-                                                                         self._replay_buffer.observations,
-                                                                         self._replay_buffer.dones,
-                                                                         self._batch_size)
-            states, actions, rewards, observations, dones = preprocessing(states,
-                                                                          actions,
-                                                                          rewards,
-                                                                          observations,
-                                                                          dones)
-            q_targets: jnp.ndarray = self._compute_q_targets(self._params,
-                                                             self._target_params,
-                                                             states,
-                                                             actions,
-                                                             rewards,
-                                                             observations,
-                                                             dones)
-            self._params, self._opt_state = self._train_step(self._params,
-                                                             self._opt_state,
-                                                             states,
-                                                             q_targets)
-        if self._monitoring:
-            activations, features = self._forward_analysis(self._params, states)
-            loss: ndarray = loss_metric(activations, q_targets)
-            self._episode_losses.append(loss)
-            if self._tpt:
-                self._tpt_analysis(actions, activations, features)
-
-    def _reset(self):
-        if self._monitoring and self._tpt:
-            for index, cls in self._episode_class_data.items():
-                self._episode_class_data[index] = cls[-101:-1]
-            for index, ftr in self._episode_feature_data.items():
-                self._episode_feature_data[index] = ftr[-101:-1]
+        q_targets: jnp.ndarray = self._compute_q_targets(self._params,
+                                                         self._target_params,
+                                                         states,
+                                                         actions,
+                                                         rewards,
+                                                         observations,
+                                                         dones)
+        self._params, self._opt_state = self._train_step(self._params,
+                                                         self._opt_state,
+                                                         states,
+                                                         q_targets)
 
     def _run_episode(self, step_count: int, episode: int):
-        self._reset()
         epi_reward: float = 0.
         state: ndarray = self._env.reset()
         for step in range(1, self._max_episodes + 1):
@@ -257,13 +209,6 @@ class Agent:
         if self._monitoring and self._training_start < step_count:
             episode_loss: float = sum(self._episode_losses)
             self._loss_history.append(episode_loss)
-            if self._tpt and step_count % self._train_frequency == 0:
-                cls_means = data_means(self._episode_class_data)
-                cls_eq_dist, cls_mean_var = mean_eq_dist(cls_means, 1)
-                ftr_means = data_means(self._episode_feature_data)
-                ftr_eq_dist, ftr_mean_var = mean_eq_dist(ftr_means, 0)
-                self._class_mean_vars.append(cls_mean_var)
-                self._feature_mean_vars.append(ftr_mean_var)
 
         asyncio.run(self._update_epsilon())
         asyncio.run(self._update_reward_history(epi_reward))
@@ -286,7 +231,7 @@ class Agent:
                                                                         self._average_reward()))
 
             if self._average_reward() > self._reward_to_reach:
-                asyncio.run(self._save_state(self._params, self._opt_state))
+                self._save_state(self._params, self._opt_state)
                 self._plot()
                 return
 
@@ -300,31 +245,16 @@ class Agent:
         return self._average_reward()
 
     def _plot(self):
-        loss_fig: plt.Figure = plt.figure()
-        x_l = [i for i in range(len(self._loss_history))]
-        plt.plot(x_l, self._loss_history)
+        reward_fig: plt.Figure = plt.figure()
+        x_r = [i for i in range(len(self._reward_history))]
+        plt.plot(x_r, self._reward_history)
         plt.xlabel("Episodes")
-        plt.ylabel("Loss")
-        loss_fig.show()
-        # loss_fig.savefig(open(os.path.join("/", self._saving_directory, "/loss.png"), "wb"), dpi=250)
+        plt.ylabel("Reward")
+        reward_fig.show()
         if self._monitoring:
-            reward_fig: plt.Figure = plt.figure()
-            x_r = [i for i in range(len(self._reward_history))]
-            plt.plot(x_r, self._reward_history)
+            loss_fig: plt.Figure = plt.figure()
+            x_l = [i for i in range(len(self._loss_history))]
+            plt.plot(x_l, self._loss_history)
             plt.xlabel("Episodes")
-            plt.ylabel("Reward")
-            reward_fig.show()
-            # reward_fig.savefig(open(os.path.join("/", self._saving_directory, "/reward.png"), "wb"), dpi=250)
-            x_v = [i for i in range(len(self._class_mean_vars))]
-            cls_vars_fig: plt.Figure = plt.figure()
-            plt.plot(x_v, self._class_mean_vars)
-            plt.xlabel("Episodes")
-            plt.ylabel("Class Mean Variance")
-            cls_vars_fig.show()
-            # cls_vars_fig.savefig(open(os.path.join(self._saving_directory, "/class_mean_variance.png"), "wb"), dpi=250)
-            ftr_vars_fig: plt.Figure = plt.figure()
-            plt.plot(x_v, self._feature_mean_vars)
-            plt.xlabel("Episodes")
-            plt.ylabel("Feature Mean Variance")
-            ftr_vars_fig.show()
-            # ftr_vars_fig.savefig(open(os.path.join(self._saving_directory, "/feature_mean_variance.png"), "wb"), dpi=250)
+            plt.ylabel("Loss")
+            loss_fig.show()

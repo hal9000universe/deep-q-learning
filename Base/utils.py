@@ -45,7 +45,7 @@ def generate_visualization(environment: gym.Env, network: hk.Transformed) -> Cal
         state: ndarray = environment.reset()
         done: bool = False
         while not done:
-            action: int = int(argmax(network.apply(params[0], state)))
+            action: int = int(argmax(network.apply(params, state)))
             state, reward, done, info = environment.step(action)
             environment.render()
 
