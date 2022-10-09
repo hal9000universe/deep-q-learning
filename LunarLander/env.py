@@ -3,7 +3,7 @@ from typing import Any, Tuple
 
 # nn & rl
 import gym
-from numpy import ndarray, append, newaxis
+from numpy import ndarray, append, newaxis, float32
 
 
 class ObsWrapper(gym.Wrapper):
@@ -18,7 +18,7 @@ class ObsWrapper(gym.Wrapper):
 
     def observation(self, observation: ndarray) -> ndarray:
         fraction_finished: float = self._step / self._max_steps
-        return append(observation, fraction_finished)[newaxis, ...]
+        return append(observation, fraction_finished)[newaxis, ...].astype(float32)
 
     def step(self, action) -> Tuple[ndarray, float, bool, Any]:
         self._step += 1

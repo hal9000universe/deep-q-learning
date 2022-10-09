@@ -8,3 +8,6 @@ if __name__ == '__main__':
         action = env.action_space.sample()
         observation, reward, done, _, info = env.step(action)
         env.render()
+        if done:
+            break
+    exit()
