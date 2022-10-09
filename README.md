@@ -5,5 +5,4 @@ with various reinforcement learning algorithms
 and apply them to different environments.
 
 # TODO
-- fix prioritized experience replay (+testing)
-- learn CartPole, Pong, Breakout
+- implement actor-critic-algorithm for humanoid environment
